@@ -1105,7 +1105,7 @@ public:
 
   Value *createReduceMacIntrinsic(
             Value *A, Value *B, unsigned BlockSize, Instruction *InsertBefore) {
-    auto *MacIntrinsic = Intrinsic::getDeclaration(InsertBefore->getModule(), 
+    auto *MacIntrinsic = Intrinsic::getDeclaration(InsertBefore->getModule(),
                       Intrinsic::vector_reduce_mac, ArrayRef<Type*>({A->getType()}));
     auto *Int32Ty = Type::getInt32Ty(InsertBefore->getParent()->getContext());
     std::vector<Value *> Args = {A, B, ConstantInt::get(Int32Ty, BlockSize)};
@@ -1604,23 +1604,23 @@ public:
     return nullptr;
   }
 
-  Value *insertIntrinsicOperation(Intrinsic::ID ID, Value *Operand, Type *Ty, 
+  Value *insertIntrinsicOperation(Intrinsic::ID ID, Value *Operand, Type *Ty,
                                   const StringRef &Name, Instruction *InsertBefore) {
-    auto *Declaration = Intrinsic::getDeclaration(InsertBefore->getModule(), 
+    auto *Declaration = Intrinsic::getDeclaration(InsertBefore->getModule(),
                                 ID, ArrayRef<Type*>({Ty}));
 
-    return CallInst::Create(Declaration->getFunctionType(), Declaration, 
+    return CallInst::Create(Declaration->getFunctionType(), Declaration,
                                 ArrayRef<Value *>(Operand), Name, InsertBefore);
 }
 
 Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
-                                ElementWiseInfo &EwInfo, Value *Input, 
-                                Type *ElemTy, const StringRef &OpName, 
+                                ElementWiseInfo &EwInfo, Value *Input,
+                                Type *ElemTy, const StringRef &OpName,
                                 Instruction *InsertBefore) {
     auto &Ctx = InsertBefore->getParent()->getContext();
-    
+
     // Get the index into the tensor
-    auto *Offset = computeIndex(EwInfo.Tensor, EwInfo.TensorIndices, 
+    auto *Offset = computeIndex(EwInfo.Tensor, EwInfo.TensorIndices,
                                 EwInfo.getNumLoopsCollapsed(), InsertBefore);
     Value *UpdatedTensor = EwInfo.PHITensor;
     for(unsigned I = 0; I < EwInfo.TileSize; I++) {
@@ -1635,17 +1635,17 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
         auto *CastElem = convertToFloat(Elem, InsertBefore);
 
         // Compute the sine
-        auto *Op = insertIntrinsicOperation(ID, CastElem, 
+        auto *Op = insertIntrinsicOperation(ID, CastElem,
                                     CastElem->getType(), OpName, InsertBefore);
 
         // Insert the new element
-        UpdatedTensor = InsertElementInst::Create(UpdatedTensor, Op, Offset, 
+        UpdatedTensor = InsertElementInst::Create(UpdatedTensor, Op, Offset,
                                                     "insert.elem", InsertBefore);
     }
     return UpdatedTensor;
   }
 
-  Value *lowerElementWiseTensorOp(CallInst *Op, Intrinsic::ID ID, unsigned TileSize, 
+  Value *lowerElementWiseTensorOp(CallInst *Op, Intrinsic::ID ID, unsigned TileSize,
                                   const StringRef &OpName) {
     // Get the input tensor
     auto *Input = TI->getTensorOperand(Op, 0);
@@ -1662,7 +1662,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     EwInfo.insertTensorPHI(Input, ElemTy);
 
     auto *InnerBodyTerminator = EwInfo.getInnerLoopBody()->getTerminator();
-    auto *Output = generateElementWiseScalarKernel(ID, EwInfo, Input, 
+    auto *Output = generateElementWiseScalarKernel(ID, EwInfo, Input,
                                             ElemTy, OpName, InnerBodyTerminator);
 
     // Complete the phi ndoe representing the tensor
@@ -1776,7 +1776,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
       auto *Two = getConstantValue(Ctx, CastElem->getType(), 2);
       auto *Exponent = BinaryOperator::Create(
           Instruction::FMul, Two, Elem, "exponent", InsertBefore);
-      auto *Exp = insertIntrinsicOperation(Intrinsic::exp, Exponent, 
+      auto *Exp = insertIntrinsicOperation(Intrinsic::exp, Exponent,
                         Exponent->getType(), "exp", InsertBefore);
 
       // Compute Tanh
@@ -1844,7 +1844,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
       auto *Exponent = convertToFloat(Elem, InsertBefore);
 
       // Compute the exponent
-      auto *Exp = insertIntrinsicOperation(Intrinsic::exp, Exponent, 
+      auto *Exp = insertIntrinsicOperation(Intrinsic::exp, Exponent,
                             Exponent->getType(), "exp", InsertBefore);
 
       // Compute Tanh
@@ -1906,7 +1906,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
       Value *BroadcastVal, unsigned NumElems, Instruction *InsertBefore) {
     // Generate the vector splat intrinsic
     auto *RetTy = FixedVectorType::get(BroadcastVal->getType(), NumElems);
-    auto *SplatIntrinsic = Intrinsic::getDeclaration(InsertBefore->getModule(), 
+    auto *SplatIntrinsic = Intrinsic::getDeclaration(InsertBefore->getModule(),
                                   Intrinsic::vector_splat, ArrayRef<Type*>({RetTy}));
     std::vector<Value *> Args {Input, BroadcastVal};
     return CallInst::Create(SplatIntrinsic, Args, "", InsertBefore);

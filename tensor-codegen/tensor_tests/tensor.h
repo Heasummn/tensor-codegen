@@ -26,5 +26,6 @@ _tensor_t tensor_transpose(_token_t);
 _tensor_t tensor_broadcast(_token_t, int);
 _tensor_t tensor_matmul(_token_t, _token_t);
 _tensor_t10000 tensor_matmul10000(_token_t, _token_t);
+_tensor_t tensor_convolution(_token_t, _token_t);
 
 #endif

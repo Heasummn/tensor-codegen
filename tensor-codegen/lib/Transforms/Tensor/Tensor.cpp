@@ -178,6 +178,15 @@ static Function *getIntrinsicDeclaration(CallInst *CI, std::vector<Type *> &Args
      return Intrinsic::getDeclaration(M, Intrinsic::tensor_matmul,
               ArrayRef<Type*>({CI->getCalledFunction()->getReturnType()}));
    }
+   if(CalledFuncName.contains(StringRef("tensor_convolution"))) {
+     auto *TypeInfoIntrinsic1 = FakeTypeToTokenTypeVal[CI->getArgOperand(0)];
+     auto *TypeInfoIntrinsic2 = FakeTypeToTokenTypeVal[CI->getArgOperand(1)];
+     assert(dyn_cast<CallInst>(TypeInfoIntrinsic1) && dyn_cast<CallInst>(TypeInfoIntrinsic2)
+         && "Tensor ops' operands must come from typeinfo");
+     errs() << "DEALING WITH CONV\n";
+     return Intrinsic::getDeclaration(M, Intrinsic::tensor_convolution,
+              ArrayRef<Type*>({CI->getCalledFunction()->getReturnType()}));
+   }
 
    return nullptr;
 }
@@ -200,6 +209,7 @@ static bool isTensorCall(CallInst *CI) {
        || CalledFuncName.contains(StringRef("tensor_floor"))
        || CalledFuncName.contains(StringRef("tensor_ceil"))
        || CalledFuncName.contains(StringRef("tensor_matmul"))
+       || CalledFuncName.contains(StringRef("tensor_convolution"))
        || CalledFuncName.contains(StringRef("tensor_broadcast"))
        || CalledFuncName.contains(StringRef("tensor_transpose")));
 }
@@ -219,7 +229,7 @@ static bool isTensorValuePHI(PHINode *PHI) {
     // If the incoming vector values are constant, skip them.
     for(unsigned i = 0; i < PHI->getNumOperands(); i++) {
       if(!dyn_cast<ConstantVector>(PHI->getIncomingValue(i))) {
-        return true; 
+        return true;
       }
     }
   }
@@ -234,7 +244,7 @@ static bool isTensorTokenPHI(PHINode *PHI) {
     // If the incoming vector values are constant, skip them.
     for(unsigned i = 0; i < PHI->getNumOperands(); i++) {
       if(!dyn_cast<ConstantVector>(PHI->getIncomingValue(i))) {
-        return true; 
+        return true;
       }
     }
   }
@@ -253,11 +263,11 @@ static bool isTensorInstruction(Instruction *I) {
   if(auto *PHI = dyn_cast<PHINode>(I)) {
     return isTensorPHI(PHI);
   }
-  
+
   return isLLVMTensorInstruction(I);
 }
 
-static SmallVector<Value *, 3> getPropertyInfoForTensorPHI(PHINode *PHI, 
+static SmallVector<Value *, 3> getPropertyInfoForTensorPHI(PHINode *PHI,
                         DenseMap<Value *, SmallVector<Value *, 3>> &ValToPropertyMap) {
   errs() << "GET PROPERTY INFO FOR TENSOR PHI\n";
   // Now that we have to find this shape, layout and padding info
@@ -308,7 +318,7 @@ static SmallVector<Value *, 3> getPropertyInfoForTensorPHI(PHINode *PHI,
 
         if(CalledFuncName.contains(StringRef("tensor_matmul"))
         || CalledFuncName.contains(StringRef("tensor_transpose"))) {
-          // We use the map information of PHI's operands. 
+          // We use the map information of PHI's operands.
           // We are keeping things simple here for now.
           // The assumption here is that the PHI's operands
           // have the same tensor properties.
@@ -330,7 +340,7 @@ static SmallVector<Value *, 3> getPropertyInfoForTensorPHI(PHINode *PHI,
       if(dyn_cast<ReturnInst>(I)) {
         continue;
       }
-      
+
       assert(false && "Cannot reach here");
     }
   }
@@ -400,10 +410,10 @@ static bool addTypeInfoAfterTensorPHI(PHINode *PHI,
                     TensorProperties[1]->getType(), TensorProperties[2]->getType()};
   std::vector<Value *> Args = {TensorValue, TensorProperties[0], TensorProperties[1], TensorProperties[2]};
   auto *TypeInfo = TensorValue->getModule()->getFunction("tensor_typeinfo");
-  auto *CI = CallInst::Create(TypeInfo->getFunctionType(), TypeInfo, ArrayRef<Value *>(Args), 
+  auto *CI = CallInst::Create(TypeInfo->getFunctionType(), TypeInfo, ArrayRef<Value *>(Args),
                          "", TensorValue->getParent()->getFirstNonPHI());
   errs() << "CALL INSTRUCTION INSERTED: " << *CI << "\n";
-  
+
   // Replace uses of PHI instruction with this new call yet.
   PHI->replaceAllUsesWith(CI);
 
@@ -416,7 +426,7 @@ static bool addTypeInfoAfterTensorPHI(PHINode *PHI,
 }
 
 SmallVector<Value *, 3> getMatMulOuputProperties(LLVMContext &Ctx,
-                                                 SmallVector<Value *, 3> &Input1, 
+                                                 SmallVector<Value *, 3> &Input1,
                                                  SmallVector<Value *, 3> &Input2) {
 
     auto getShapeDimensionVal = [](Value *Shape, unsigned Index) {
@@ -506,7 +516,7 @@ SmallVector<Value *, 3> getTransposeOuputProperties(LLVMContext &Ctx,
     return PropertyArray;
 }
 
-static bool mapTensorValToProperty(Instruction *I, 
+static bool mapTensorValToProperty(Instruction *I,
                                    DenseMap<Value *, SmallVector<Value *, 3>> &ValToPropertyMap,
                                    SmallSet<Instruction *, 4> &TensorWaitlist) {
   errs() << "==== MAPPING TENSOR VALUE TO PROPERTY: " << *I << "\n";
@@ -564,13 +574,13 @@ static bool mapTensorValToProperty(Instruction *I,
           return false;
         }
       }
-     
+
       SmallVector<Value *, 3> PropertyList = ValToPropertyMap[CI->getArgOperand(0)];
       errs() << "CALL OPERAND POINTER: " << CI->getArgOperand(0) << "\n";
       errs() << "PROPERTY LIST: " << PropertyList[0] << " " << PropertyList[1] << " " << PropertyList[2] << "\n";
 
       ValToPropertyMap[CI] = ValToPropertyMap[CI->getArgOperand(0)];//PropertyList;
-      
+
       // If this call is in the tensor wait list, this is good time to remove it!
       TensorWaitlist.erase(CI);
       return true;
@@ -604,9 +614,9 @@ static bool mapTensorValToProperty(Instruction *I,
 
             OperandProperties.push_back(ValToPropertyMap[CI->getArgOperand(i)]);
         }
-        
+
         // Add the output tensor's properties
-        ValToPropertyMap[CI] = getMatMulOuputProperties(CI->getModule()->getContext(), 
+        ValToPropertyMap[CI] = getMatMulOuputProperties(CI->getModule()->getContext(),
                                                   OperandProperties[0], OperandProperties[1]);
 
         // If this call is in the tensor wait list, this is good time to remove it!
@@ -639,9 +649,9 @@ static bool mapTensorValToProperty(Instruction *I,
       }
 
       // Add the output tensor's properties
-      ValToPropertyMap[CI] = getTransposeOuputProperties(CI->getModule()->getContext(), 
+      ValToPropertyMap[CI] = getTransposeOuputProperties(CI->getModule()->getContext(),
                                                   ValToPropertyMap[CI->getArgOperand(0)]);
-      
+
       // If this call is in the tensor wait list, this is good time to remove it!
       TensorWaitlist.erase(CI);
 
@@ -699,13 +709,13 @@ static bool mapTensorValToProperty(Instruction *I,
       assert(Layout == PropertyList[1] && "Tensor layout of operand must match.");
     }
 
-    errs() << "--INSTRUCTION: " << *Inst << " MAPPED TO " << *PropertyList[0] << " " 
+    errs() << "--INSTRUCTION: " << *Inst << " MAPPED TO " << *PropertyList[0] << " "
                               << *PropertyList[1] << " " << *PropertyList[2] << "\n";
   }
-  
+
   // Deal with PHIs later
   if(auto *PHI = dyn_cast<PHINode>(I)) {
-    // If this PHI node is for a tensor value, 
+    // If this PHI node is for a tensor value,
     if(isTensorValuePHI(PHI)) {
       ValToPropertyMap[PHI] = getPropertyInfoForTensorPHI(PHI, ValToPropertyMap);
       TensorWaitlist.erase(PHI);
@@ -765,8 +775,8 @@ bool TensorPass::runOnFunction(Function &F) {
         bool Mapped = mapTensorValToProperty(Inst, ValToPropertyMap, TensorWaitlist);
         errs() << "MAPPED: " << Mapped << "\n";
         if (auto *CI = dyn_cast<CallInst>(Inst)) {
-          
-          CallInst* TypeInfoCI = dyn_cast<CallInst>(CI->getArgOperand(0)); 
+
+          CallInst* TypeInfoCI = dyn_cast<CallInst>(CI->getArgOperand(0));
           // In case a new vector PHI for typeinfo was
           // inserted, not previously visited in RPOT
           if(Mapped && TypeInfoCI && find(CallInstVect,TypeInfoCI) == CallInstVect.end()){
@@ -776,7 +786,7 @@ bool TensorPass::runOnFunction(Function &F) {
                   errs()<<*TypeInfoCI<<"\n";
                   CallInstVect.push_back(TypeInfoCI);
 
-                } 
+                }
           }
 
           errs() << "CALL INSTRUCTION FOUND\n";
@@ -844,11 +854,11 @@ bool TensorPass::runOnFunction(Function &F) {
   // Remove TypeInfo function calls
   for (auto *CI  : ReplaceCallsUses) {
     errs() << "ERASING INSTRUCTION: " << *CI << "\n";
-    
-    // Erasing this 
+
+    // Erasing this
     CI->eraseFromParent();
   }
- 
+
   return true;
 }
 
