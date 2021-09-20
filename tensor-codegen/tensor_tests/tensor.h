@@ -4,6 +4,7 @@
 
 // Define vector types
 typedef int _tensor_t  __attribute__((__vector_size__(16)));//, __aligned__(4)));
+typedef int _tensor_t16  __attribute__((__vector_size__(16*4)));
 
 typedef int _tensor_t10000  __attribute__((__vector_size__(40000)));//, __aligned__(4)));
 //typedef int _tensor_t  __attribute__((__vector_size__(32), __aligned__(4)));
@@ -11,14 +12,21 @@ typedef int _tensor_t10000  __attribute__((__vector_size__(40000)));//, __aligne
 //typedef int _tensor_t  __attribute__((__vector_size__(128), __aligned__(4)));
 
 typedef int _shape_t   __attribute__((__vector_size__(16), __aligned__(4)));
+typedef int _shape_t16  __attribute__((__vector_size__(16*4)));
+
 typedef int _layout_t  __attribute__((__vector_size__(16), __aligned__(4)));
+typedef int _layout_t16  __attribute__((__vector_size__(16*4)));
+
 typedef int _padding_t __attribute__((__vector_size__(16), __aligned__(4)));
+typedef int _padding_t16  __attribute__((__vector_size__(16*4)));
+
 //typedef int _token_t __attribute__((__vector_size__(16), __aligned__(4)));
 typedef int _token_t;
 
 // Define the tensor functions.
 _token_t tensor_typeinfo(_tensor_t, _shape_t, _layout_t, _padding_t);
 _token_t tensor_typeinfo10000(_tensor_t10000, _shape_t, _layout_t, _padding_t);
+_token_t tensor_typeinfo16(_tensor_t16, _shape_t, _layout_t, _padding_t);
 
 _tensor_t tensor_relu(_token_t);
 _tensor_t tensor_tanh(_token_t);

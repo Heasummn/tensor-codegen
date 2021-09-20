@@ -38,6 +38,7 @@
 #include "llvm/IR/TensorType.h"
 #include "llvm/Transforms/Scalar/LowerTensorIntrinsics.h"
 
+#include <iostream>
 #include <fstream>
 
 
@@ -1499,6 +1500,8 @@ public:
                       << InnerLoopUnrollFactor << "\n");
     // auto *LTensor = TI->getTensorOperand(MatMul, 0);
     // auto *RTensor = TI->getTensorOperand(MatMul, 1);
+    errs() << "REACHED " << *LTensor <<  "\n";
+
     TensorType &LTensorType = TI->getTensorTypeInfoFor(LTensor);
     TensorType &RTensorType = TI->getTensorTypeInfoFor(RTensor);
     auto *EltType = dyn_cast<VectorType>(MatMul->getType())->getElementType();
@@ -2060,6 +2063,67 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
 
     return Output;
   }
+
+  Value *lowerConv(CallInst *Conv) {
+    errs() << "LOWERING CONVOLUTION" << "\n";
+    auto *Input = TI->getTensorOperand(Conv, 0);
+    auto *Filter = TI->getTensorOperand(Conv, 1);
+    errs() << *(Input->getType()) << "\n";
+    errs() << *(Filter->getType()) << "\n";
+    errs() << "REACHED " << *Input << " " << *Filter <<  "\n";
+    TensorType &InputTensor = TI->getTensorTypeInfoFor(Input);
+
+    auto *ElemTy = dyn_cast<VectorType>(Input->getType())->getElementType();
+
+
+    auto* II = dyn_cast<IntrinsicInst>(Conv);
+    Instruction *InsertBefore = II;
+
+    auto Ty = Type::getInt32Ty(II->getModule()->getContext());
+    auto Ty8 = Type::getInt8Ty(II->getModule()->getContext());
+    errs() << "REACHED " << *Input <<  "\n";
+    InputTensor.print(errs());
+    // TODO: Hardcoded for now
+    auto *FilterSize = ConstantInt::get(Ty, 4);
+    auto *InputWidth = ConstantInt::get(Ty, 4);
+    auto *FilterWidth = ConstantInt::get(Ty, 2);
+
+    // inputwidth - filter width / stride + 1(stride = 1)
+    auto *sub = BinaryOperator::Create(Instruction::Sub, InputWidth, FilterWidth, "convs.sub", InsertBefore);
+    auto *ConvSingle = BinaryOperator::Create(Instruction::Add, sub, ConstantInt::get(Ty, 1), "convs.single", InsertBefore);
+    auto *NumberConvs = BinaryOperator::Create(Instruction::Mul, ConvSingle, ConvSingle, "convs.number", InsertBefore);
+    auto *Im2ColSize = BinaryOperator::Create(Instruction::Mul, FilterSize, NumberConvs, "im2col.size", InsertBefore);
+
+    errs() << "COMPUTED IM2COLSIZE \n";
+
+    auto *VecTy = dyn_cast<FixedVectorType>(Conv->getType());
+    auto *AllocTy = VecTy->getElementType();
+    Instruction *MallocPtr = CallInst::CreateMalloc(
+              InsertBefore, AllocTy, AllocTy, ConstantInt::get(AllocTy, 1),
+              Im2ColSize, nullptr, "");
+
+    errs() << "COMPUTED MALLOC PTR " << *MallocPtr << "\n";
+
+    auto *V = ExtractElementInst::Create(
+            Input, ConstantInt::get(ElemTy, 0),
+            "im2col.extract", InsertBefore);
+
+    errs() << *V << "\n";
+
+    errs() << *cast<PointerType>(MallocPtr->getType())->getElementType() << "\n";
+    StoreInst *st = new StoreInst(V, MallocPtr, InsertBefore);
+
+
+    unsigned AS =
+        dyn_cast<PointerType>(MallocPtr->getType())->getAddressSpace();
+    auto *CastMallocPtr = CastInst::CreatePointerCast(
+        MallocPtr, PointerType::get(VecTy, AS), "malloc.cast", InsertBefore);
+    auto *Output =
+        new LoadInst(VecTy, CastMallocPtr, "final.load", false, {}, InsertBefore);
+
+    errs() << *Input << " " << *MallocPtr << "\n";
+    return Output;
+  }
 };
 
 static std::vector<size_t> divisorsSmallerThan(size_t n, size_t kmax) {
@@ -2235,6 +2299,7 @@ bool LowerTensorIntrinsicsLegacyPass::runOnFunction(Function &F) {
         case Intrinsic::tensor_tanh:
         case Intrinsic::tensor_sigmoid:
         case Intrinsic::tensor_broadcast:
+        case Intrinsic::tensor_convolution:
           TensorInsts.push_back(II);
           break;
         default:
@@ -2326,6 +2391,9 @@ bool LowerTensorIntrinsicsLegacyPass::runOnFunction(Function &F) {
       Output = LMT.lowerTranspose(
           II, getKnob("TileSize_M", TileSize_M), getKnob("TileSize_N", TileSize_N),
           getKnob("InnerLoopUnrollFactor", InnerLoopUnrollFactor));
+      break;
+    case Intrinsic::tensor_convolution:
+      Output = LMT.lowerConv(II);
       break;
     default:
       continue;

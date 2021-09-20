@@ -69,6 +69,7 @@ bool TensorInfo::isTensorInstruction(Instruction *I) {
             case Intrinsic::tensor_floor:
             case Intrinsic::tensor_ceil:
             case Intrinsic::tensor_matmul:
+            case Intrinsic::tensor_convolution:
             case Intrinsic::tensor_broadcast:
             case Intrinsic::tensor_transpose:
                 return true;
@@ -129,7 +130,7 @@ TensorType TensorInfo::getPropertyInfoWithForwardAnalysis(Instruction *I) {
 
         // Account for typeinfo call
         if(II->getIntrinsicID() == Intrinsic::tensor_typeinfo) {
-          TensorType PropertyList(II->getArgOperand(1), II->getArgOperand(2), 
+          TensorType PropertyList(II->getArgOperand(1), II->getArgOperand(2),
                                            II->getArgOperand(3));
           return PropertyList;
         }
@@ -168,7 +169,7 @@ TensorType TensorInfo::getPropertyInfoWithForwardAnalysis(Instruction *I) {
       if(dyn_cast<ReturnInst>(UserInst)) {
         continue;
       }
-      
+
       assert(false && "Cannot reach here");
     }
   }
@@ -240,7 +241,7 @@ TensorType TensorInfo::getTransposeOuputProperties(LLVMContext &Ctx, TensorType 
     return TensorType(Shape, Layout, Padding);
 }
 
-bool TensorInfo::mapTensorValToProperty(Instruction *I, 
+bool TensorInfo::mapTensorValToProperty(Instruction *I,
                                    SmallSet<Instruction *, 4> &TensorWaitlist) {
   errs() << "MAP TENSOR VAL TO PROPERTY\n";
   errs() << "INSTRUCTION: " << *I << "\n";
@@ -250,7 +251,7 @@ bool TensorInfo::mapTensorValToProperty(Instruction *I,
       TensorType PropertyList(II->getArgOperand(1), II->getArgOperand(2), II->getArgOperand(3));
       ValToPropertyMap[II] = PropertyList;
       ValToPropertyMap[II->getArgOperand(0)] = PropertyList;
-      PropertyList.print(errs()); 
+      PropertyList.print(errs());
 
       // If the typeinfo operand is a pointer to tensor, put that in map too
       if(II->getArgOperand(0)->getType()->isPointerTy()) {
@@ -302,12 +303,12 @@ bool TensorInfo::mapTensorValToProperty(Instruction *I,
           return false;
         }
       }
-     
+
       TensorType PropertyList = ValToPropertyMap[II->getArgOperand(0)];
       PropertyList.print(errs());
 
       ValToPropertyMap[II] = ValToPropertyMap[II->getArgOperand(0)];
-      
+
       // If this call is in the tensor wait list, this is good time to remove it!
       TensorWaitlist.erase(II);
       return true;
@@ -337,9 +338,44 @@ bool TensorInfo::mapTensorValToProperty(Instruction *I,
 
             OperandProperties.push_back(ValToPropertyMap[II->getArgOperand(i)]);
         }
-        
+
         // Add the output tensor's properties
-        ValToPropertyMap[II] = getMatMulOuputProperties(II->getModule()->getContext(), 
+        ValToPropertyMap[II] = getMatMulOuputProperties(II->getModule()->getContext(),
+                                        OperandProperties[0], OperandProperties[1]);
+
+        // If this call is in the tensor wait list, this is good time to remove it!
+        TensorWaitlist.erase(II);
+
+        return true;
+    }
+
+    if(II->getIntrinsicID() == Intrinsic::tensor_convolution) {
+      errs() << "CONVOLUTION\n";
+        SmallVector<TensorType, 2> OperandProperties;
+        for(unsigned i = 0; i < 2; i++) {
+            const auto &It = ValToPropertyMap.find(II->getArgOperand(i));
+            if(It == ValToPropertyMap.end()) {
+                // The input tensor value must be in the wait list.
+                //assert(TensorWaitlist.find(CI->getArgOperand(0)) != TensorWaitlist.end()
+                //    && "Tensor with unresolved properties must be in thje wait list.");
+                auto *CallArgInst = dyn_cast<Instruction>(II->getArgOperand(i));
+                TensorWaitlist.insert(CallArgInst);
+
+                // Try to find the input tensor value's properties now.
+                if(!mapTensorValToProperty(CallArgInst, TensorWaitlist)) {
+                    // Since we still could not resolve the properties, put this call in the wait list
+                    TensorWaitlist.insert(II);
+                    return false;
+                }
+            }
+            TensorType PropertyList = ValToPropertyMap[II->getArgOperand(i)];
+            PropertyList.print(errs());
+
+            OperandProperties.push_back(ValToPropertyMap[II->getArgOperand(i)]);
+        }
+
+        // Add the output tensor's properties: TODO
+        ValToPropertyMap[II] = getMatMulOuputProperties(II->getModule()->getContext(),
                                         OperandProperties[0], OperandProperties[1]);
 
         // If this call is in the tensor wait list, this is good time to remove it!
@@ -368,7 +404,7 @@ bool TensorInfo::mapTensorValToProperty(Instruction *I,
       }
 
       // Add the output tensor's properties
-      ValToPropertyMap[II] = getTransposeOuputProperties(II->getModule()->getContext(), 
+      ValToPropertyMap[II] = getTransposeOuputProperties(II->getModule()->getContext(),
                                             ValToPropertyMap[II->getArgOperand(0)]);
 
       // If this call is in the tensor wait list, this is good time to remove it!
@@ -425,10 +461,10 @@ bool TensorInfo::mapTensorValToProperty(Instruction *I,
     }
     PropertyList.print(errs());
   }
-  
+
   // Deal with PHIs later
   if(auto *PHI = dyn_cast<PHINode>(I)) {
-    // If this PHI node is for a tensor value, 
+    // If this PHI node is for a tensor value,
     if(isTensorInstruction(PHI)) {
       TensorType PropertyArray = getPropertyInfoWithForwardAnalysis(PHI);
       assert(PropertyArray.isValidTensorType() && "Invalid tensor type");
@@ -487,7 +523,7 @@ bool TensorInfo::analyze(Function &F) {
   for(auto *I : TensorWaitlist) {
     mapTensorValToProperty(I, TensorWaitlist);
   }
-  
+
 
    errs() << "---PRINTING FUNCTION: " << F << "\n";
 

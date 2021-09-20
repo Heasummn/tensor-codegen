@@ -468,6 +468,50 @@ SmallVector<Value *, 3> getMatMulOuputProperties(LLVMContext &Ctx,
     return PropertyArray;
 }
 
+SmallVector<Value *, 3> getConvOutputProperties(LLVMContext &Ctx,
+                                                 SmallVector<Value *, 3> &Input1,
+                                                 SmallVector<Value *, 3> &Input2) {
+    auto getShapeDimensionVal = [](Value *Shape, unsigned Index) {
+        if(auto *CV = dyn_cast<ConstantVector>(Shape)) {
+          auto *C = CV->getAggregateElement(Index);
+          return dyn_cast<ConstantInt>(C)->getZExtValue();
+        }
+      };
+    // Get the shape of the output tensor of convolution
+    auto *Int32Ty = Type::getInt32Ty(Ctx);
+
+    // TODO: For now, we return a 2x2 tensor shape
+    std::vector<Constant *> ShapeVec;
+    std::vector<Constant *> LayoutVec;
+    std::vector<Constant *> PaddingVec;
+
+    ShapeVec.push_back(ConstantInt::get(Int32Ty, 1));
+    ShapeVec.push_back(ConstantInt::get(Int32Ty, 1));
+    ShapeVec.push_back(ConstantInt::get(Int32Ty, 2));
+    ShapeVec.push_back(ConstantInt::get(Int32Ty, 2));
+
+    LayoutVec.push_back(ConstantInt::get(Int32Ty, 1));
+    LayoutVec.push_back(ConstantInt::get(Int32Ty, 2));
+    LayoutVec.push_back(ConstantInt::get(Int32Ty, 3));
+    LayoutVec.push_back(ConstantInt::get(Int32Ty, 4));
+
+    PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
+    PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
+    PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
+    PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
+
+
+    Value *Shape = ConstantVector::get(ArrayRef<Constant *>(ShapeVec));
+    Value *Layout = ConstantVector::get(ArrayRef<Constant *>(LayoutVec));
+    Value *Padding = ConstantVector::get(ArrayRef<Constant *>(PaddingVec));
+    SmallVector<Value *, 3> PropertyArray;
+    PropertyArray.push_back(Shape);
+    PropertyArray.push_back(Layout);
+    PropertyArray.push_back(Padding);
+
+    return PropertyArray;
+}
+
 SmallVector<Value *, 3> getTransposeOuputProperties(LLVMContext &Ctx,
                                                  SmallVector<Value *, 3> &Input) {
 
@@ -617,6 +661,45 @@ static bool mapTensorValToProperty(Instruction *I,
 
         // Add the output tensor's properties
         ValToPropertyMap[CI] = getMatMulOuputProperties(CI->getModule()->getContext(),
+                                                  OperandProperties[0], OperandProperties[1]);
+
+        // If this call is in the tensor wait list, this is good time to remove it!
+        TensorWaitlist.erase(CI);
+
+        return true;
+    }
+
+    if(CalledFuncName.contains(StringRef("tensor_convolution"))) {
+      SmallVector<SmallVector<Value *, 3>, 2> OperandProperties;
+        for(unsigned i = 0; i < 2; i++) {
+            const auto &It = ValToPropertyMap.find(CI->getArgOperand(i));
+            errs() << "CALL OPERAND: " << *(CI->getArgOperand(i)) << "\n";
+            if(It == ValToPropertyMap.end()) {
+                errs() << "CALL OPERAND NOT MAPPED\n";
+                // The input tensor value must be in the wait list.
+                //assert(TensorWaitlist.find(CI->getArgOperand(0)) != TensorWaitlist.end()
+                //    && "Tensor with unresolved properties must be in thje wait list.");
+                auto *CallArgInst = dyn_cast<Instruction>(CI->getArgOperand(i));
+                TensorWaitlist.insert(CallArgInst);
+
+                // Try to find the input tensor value's properties now.
+                errs() << "TRY AGAIN\n";
+                if(!mapTensorValToProperty(CallArgInst, ValToPropertyMap, TensorWaitlist)) {
+                    // Since we still could not resolve the properties, put this call in the wait list
+                    errs() << "FAILED AGAIN\n";
+                    TensorWaitlist.insert(CI);
+                    return false;
+                }
+            }
+            //SmallVector<Value *, 3> PropertyList = ValToPropertyMap[II->getArgOperand(i)];
+            errs() << "CALL OPERAND POINTER: " << CI->getArgOperand(i) << "\n";
+            //PropertyList.print(errs());
+
+            OperandProperties.push_back(ValToPropertyMap[CI->getArgOperand(i)]);
+        }
+
+        // Add the output tensor's properties
+        ValToPropertyMap[CI] = getConvOutputProperties(CI->getModule()->getContext(),
                                                   OperandProperties[0], OperandProperties[1]);
 
         // If this call is in the tensor wait list, this is good time to remove it!
