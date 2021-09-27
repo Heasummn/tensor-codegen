@@ -42,7 +42,7 @@ class TensorInfo {
   // List of tensor values
   std::set<Value *> TensorValuesSet;
 
-  // Mapping tensor values to the buffer allocations.s
+  // Mapping tensor values to the buffer allocations.
   DenseMap<Value *, Instruction *> TensorMapToMemPtrMap;
 
   // Mapping tensor values to the actual allocated sizes
@@ -58,6 +58,9 @@ private:
       LLVMContext &Ctx, TensorType &Input1, TensorType &Input2);
 
   TensorType getTransposeOuputProperties(LLVMContext &Ctx, TensorType &Input);
+
+  TensorType getReduceOutputProperties(LLVMContext &Ctx, TensorType &Input,
+          SmallVector<unsigned, 4> &WindowShape, SmallVector<unsigned, 4> &WindowStrides);
 
 public:
   TensorInfo() = default;
@@ -114,6 +117,16 @@ public:
 
   void addMemPtrForTensorVal(Value *V, Instruction *MemPtr) {
     TensorMapToMemPtrMap[V] = MemPtr;
+  }
+
+  void addTensorInfoFor(Value *V, TensorType &Ty) {
+    ValToPropertyMap[V] = Ty;
+    TensorValuesSet.insert(V);
+  }
+
+  void removeTenorInfoFor(Value *V) {
+    ValToPropertyMap.erase(V);
+    TensorValuesSet.erase(V);
   }
 
   bool isTensorInstruction(Instruction *I);
