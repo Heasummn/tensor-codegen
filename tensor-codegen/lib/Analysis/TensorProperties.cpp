@@ -248,9 +248,6 @@ TensorType TensorInfo::getTransposeOuputProperties(LLVMContext &Ctx, TensorType 
     return TensorType(Shape, Layout, Padding);
 }
 
-<<<<<<< HEAD
-bool TensorInfo::mapTensorValToProperty(Instruction *I,
-=======
 TensorType TensorInfo::getReduceOutputProperties(LLVMContext &Ctx, TensorType &Input, 
           SmallVector<unsigned, 4> &WindowShape, SmallVector<unsigned, 4> &WindowStrides) {
     // Get the shape of the output tensor of reduction
@@ -287,7 +284,6 @@ TensorType TensorInfo::getReduceOutputProperties(LLVMContext &Ctx, TensorType &I
 }
 
 bool TensorInfo::mapTensorValToProperty(Instruction *I, 
->>>>>>> c6338ca1a8572e8e2023e90f36e2a26086f2a7f5
                                    SmallSet<Instruction *, 4> &TensorWaitlist) {
   errs() << "MAP TENSOR VAL TO PROPERTY\n";
   errs() << "INSTRUCTION: " << *I << "\n";

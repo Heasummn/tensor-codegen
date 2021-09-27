@@ -392,10 +392,6 @@ static SmallVector<Value *, 3> getPropertyInfoForTensorPHI(PHINode *PHI,
         }
 
         if(CalledFuncName.contains(StringRef("tensor_matmul"))
-<<<<<<< HEAD
-        || CalledFuncName.contains(StringRef("tensor_transpose"))) {
-          // We use the map information of PHI's operands.
-=======
         || CalledFuncName.contains(StringRef("tensor_transpose"))
         || CalledFuncName.contains(StringRef("tensor_reduce_max"))
         || CalledFuncName.contains(StringRef("tensor_reduce_min"))
@@ -405,7 +401,6 @@ static SmallVector<Value *, 3> getPropertyInfoForTensorPHI(PHINode *PHI,
         || CalledFuncName.contains(StringRef("tensor_reduce_add"))
         || CalledFuncName.contains(StringRef("tensor_reduce_mul"))) {
           // We use the map information of PHI's operands. 
->>>>>>> c6338ca1a8572e8e2023e90f36e2a26086f2a7f5
           // We are keeping things simple here for now.
           // The assumption here is that the PHI's operands
           // have the same tensor properties.
@@ -555,7 +550,6 @@ SmallVector<Value *, 3> getMatMulOuputProperties(LLVMContext &Ctx,
     return PropertyArray;
 }
 
-<<<<<<< HEAD
 SmallVector<Value *, 3> getConvOutputProperties(LLVMContext &Ctx,
                                                  SmallVector<Value *, 3> &Input1,
                                                  SmallVector<Value *, 3> &Input2) {
@@ -601,9 +595,6 @@ SmallVector<Value *, 3> getConvOutputProperties(LLVMContext &Ctx,
 }
 
 SmallVector<Value *, 3> getTransposeOuputProperties(LLVMContext &Ctx,
-=======
-SmallVector<Value *, 3> getTransposeOutputProperties(LLVMContext &Ctx,
->>>>>>> c6338ca1a8572e8e2023e90f36e2a26086f2a7f5
                                                  SmallVector<Value *, 3> &Input) {
 
     auto getVectorElemVal = [](Value *Vect, unsigned Index) {
@@ -872,11 +863,7 @@ static bool mapTensorValToProperty(Instruction *I,
       }
 
       // Add the output tensor's properties
-<<<<<<< HEAD
-      ValToPropertyMap[CI] = getTransposeOuputProperties(CI->getModule()->getContext(),
-=======
       ValToPropertyMap[CI] = getTransposeOutputProperties(CI->getModule()->getContext(), 
->>>>>>> c6338ca1a8572e8e2023e90f36e2a26086f2a7f5
                                                   ValToPropertyMap[CI->getArgOperand(0)]);
 
       // If this call is in the tensor wait list, this is good time to remove it!
