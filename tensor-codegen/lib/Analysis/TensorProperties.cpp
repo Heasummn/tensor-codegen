@@ -185,6 +185,37 @@ TensorType TensorInfo::getPropertyInfoWithForwardAnalysis(Instruction *I) {
   return TensorType();
 }
 
+TensorType TensorInfo::getConvOuputProperties(LLVMContext &Ctx,
+                                TensorType &Input1, TensorType &Input2) {
+    errs() << "GETTING CONV OUTPUT PROPERTIES\n";
+    // Get the shape of the output tensor of conv
+    auto *Int32Ty = Type::getInt32Ty(Ctx);
+
+    std::vector<Constant *> ShapeVec;
+    std::vector<Constant *> LayoutVec;
+    std::vector<Constant *> PaddingVec;
+
+
+    // Add the final padding layout dimensions
+    ShapeVec.push_back(ConstantInt::get(Int32Ty, 3));
+    ShapeVec.push_back(ConstantInt::get(Int32Ty, 3));
+
+    LayoutVec.push_back(ConstantInt::get(Int32Ty, 1));
+    LayoutVec.push_back(ConstantInt::get(Int32Ty, 2));
+
+    PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
+    PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
+
+    // The output of conv is always assumed to be regular layout.
+    // TODO: currently hardcode 3x3
+    Value *Shape = ConstantVector::get(ArrayRef<Constant *>(ShapeVec));
+    Value *Layout = ConstantVector::get(ArrayRef<Constant *>(LayoutVec));
+    Value *Padding = ConstantVector::get(ArrayRef<Constant *>(PaddingVec));
+
+    errs() << "DONE\n";
+    return TensorType(Shape, Layout, Padding);
+}
+
 TensorType TensorInfo::getMatMulOuputProperties(LLVMContext &Ctx,
                                 TensorType &Input1, TensorType &Input2) {
     errs() << "GETTING MATMUL OUTPUT PROPERTIES\n";
@@ -248,7 +279,7 @@ TensorType TensorInfo::getTransposeOuputProperties(LLVMContext &Ctx, TensorType 
     return TensorType(Shape, Layout, Padding);
 }
 
-TensorType TensorInfo::getReduceOutputProperties(LLVMContext &Ctx, TensorType &Input, 
+TensorType TensorInfo::getReduceOutputProperties(LLVMContext &Ctx, TensorType &Input,
           SmallVector<unsigned, 4> &WindowShape, SmallVector<unsigned, 4> &WindowStrides) {
     // Get the shape of the output tensor of reduction
     auto *Int32Ty = Type::getInt32Ty(Ctx);
@@ -263,13 +294,13 @@ TensorType TensorInfo::getReduceOutputProperties(LLVMContext &Ctx, TensorType &I
         PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
     }
     unsigned NumWinDims = WindowShape.size();
-    unsigned OutputSize = ((WindowShape[NumWinDims - 2] 
+    unsigned OutputSize = ((WindowShape[NumWinDims - 2]
                 - Input.getShapeDimensionVal(NumInDims - 2)) / WindowStrides[NumWinDims - 2]) + 1;
     ShapeVec.push_back(ConstantInt::get(Int32Ty, OutputSize));
     LayoutVec.push_back(ConstantInt::get(Int32Ty, NumInDims - 2));
     PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
 
-    OutputSize = ((WindowShape[NumWinDims - 1] 
+    OutputSize = ((WindowShape[NumWinDims - 1]
                 - Input.getShapeDimensionVal(NumInDims - 2)) / WindowStrides[NumWinDims - 1]) + 1;
     ShapeVec.push_back(ConstantInt::get(Int32Ty, OutputSize));
     LayoutVec.push_back(ConstantInt::get(Int32Ty, NumInDims - 1));
@@ -283,7 +314,7 @@ TensorType TensorInfo::getReduceOutputProperties(LLVMContext &Ctx, TensorType &I
     return TensorType(Shape, Layout, Padding);
 }
 
-bool TensorInfo::mapTensorValToProperty(Instruction *I, 
+bool TensorInfo::mapTensorValToProperty(Instruction *I,
                                    SmallSet<Instruction *, 4> &TensorWaitlist) {
   errs() << "MAP TENSOR VAL TO PROPERTY\n";
   errs() << "INSTRUCTION: " << *I << "\n";
@@ -417,7 +448,7 @@ bool TensorInfo::mapTensorValToProperty(Instruction *I,
         }
 
         // Add the output tensor's properties: TODO
-        ValToPropertyMap[II] = getMatMulOuputProperties(II->getModule()->getContext(),
+        ValToPropertyMap[II] = getConvOuputProperties(II->getModule()->getContext(),
                                         OperandProperties[0], OperandProperties[1]);
 
         // If this call is in the tensor wait list, this is good time to remove it!
@@ -499,7 +530,7 @@ bool TensorInfo::mapTensorValToProperty(Instruction *I,
       }
 
       // Add the output tensor's properties
-      ValToPropertyMap[II] = getReduceOutputProperties(II->getModule()->getContext(), 
+      ValToPropertyMap[II] = getReduceOutputProperties(II->getModule()->getContext(),
                                             ValToPropertyMap[II->getArgOperand(0)],
                                             WinShape, Strides);
 

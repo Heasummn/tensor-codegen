@@ -256,7 +256,7 @@ static Value *ConvertToFloat(Value *V, Instruction *InsertBefore) {
 
 static int64_t GetMaxFor(Type *Ty) {
   switch(Ty->getTypeID()) {
-    case Type::IntegerTyID: 
+    case Type::IntegerTyID:
       switch(Ty->getIntegerBitWidth()) {
         case 1:
           return 1;
@@ -282,7 +282,7 @@ static int64_t GetMaxFor(Type *Ty) {
 
 static int64_t GetMinFor(Type *Ty) {
   switch(Ty->getTypeID()) {
-    case Type::IntegerTyID: 
+    case Type::IntegerTyID:
       switch(Ty->getIntegerBitWidth()) {
         case 1:
           return 0;
@@ -337,10 +337,10 @@ private:
         unsigned RegNumRows = RegTileType.getShapeVector()[0];
         unsigned RegNumCols = RegTileType.getShapeVector()[1];
         if(CacheTileType.getLayout() == RegTileType.getLayout()) {
-          if(CacheNumRows % RegNumRows == 0 && CacheNumCols % RegNumCols == 0) 
+          if(CacheNumRows % RegNumRows == 0 && CacheNumCols % RegNumCols == 0)
             return RegTileType;
         } else {
-          if(CacheNumRows % RegNumCols == 0 && CacheNumCols % RegNumRows == 0) 
+          if(CacheNumRows % RegNumCols == 0 && CacheNumCols % RegNumRows == 0)
             return RegTileType;
         }
       }
@@ -603,28 +603,29 @@ public:
       for (unsigned I = 0; I < Num2DRegTileRows; I++) {
         for (unsigned J = 0; J < Num2DRegTileCols; J++) {
           auto *Phi = PHINode::Create(
-              TileVecTy, 2, "result.tile." + Twine(I) + "." + Twine(J), 
+              TileVecTy, 2, "result.tile." + Twine(I) + "." + Twine(J),
               InnerHeaderTerminator);
           Phi->addIncoming(
               ConstantAggregateZero::get(TileVecTy), InnerLoopPreheader);
           Tiles2DPHIs[I].push_back(Phi);
         }
       }
-      
+
       // Insert typeinfo intrinsics after the PHIs
       auto RegPropertiesValVect = Out2DTileReg.getTensorPropertiesValueVector();
       auto RegPropertiesTypeVect = Out2DTileReg.getTensorPropertiesTypeVector();
       std::vector<Type *> TyArgs = {TileVecTy};
       TyArgs.insert(TyArgs.end(), RegPropertiesTypeVect.begin(), RegPropertiesTypeVect.end());
-      auto *TypeInfoFunc = Intrinsic::getDeclaration(InnerHeaderTerminator->getModule(), 
+      auto *TypeInfoFunc = Intrinsic::getDeclaration(InnerHeaderTerminator->getModule(),
                     Intrinsic::tensor_typeinfo, ArrayRef<Type *>(TyArgs));
       errs() << "TYPEINFO INTRINSIC: " << *TypeInfoFunc << "\n";
+      errs() << "Tile: " << Num2DRegTileCols << " " << Num2DRegTileRows << "\n";
       for (unsigned I = 0; I < Num2DRegTileRows; I++) {
         for (unsigned J = 0; J < Num2DRegTileCols; J++) {
           std::vector<Value *> Args = {Tiles2DPHIs[I][J]};
           Args.insert(Args.end(), RegPropertiesValVect.begin(), RegPropertiesValVect.end());
           auto *TypeInfo = CallInst::Create(TypeInfoFunc, Args,
-                              "tile.phi.typeinfo." + Twine(I) + "." + Twine(J), 
+                              "tile.phi.typeinfo." + Twine(I) + "." + Twine(J),
                               InnerHeaderTerminator);
           Out2DTiles[I].push_back(TypeInfo);
 
@@ -634,7 +635,7 @@ public:
         }
       }
     }
-    
+
     void complete2DTilePHIs() {
       errs() << "COMPLETE TILE PHIS\n";
       BasicBlock *InnerLoopLatch =
@@ -706,6 +707,7 @@ public:
     void setTilesInfo(LLVMContext &Ctx) {
       // Set up the shape and layout vectors for left hand side tile
       SmallVector<unsigned, 4> ShapeVector;
+      errs() << "SetTiles " << BlockCommonDim << " " << LBlockDim << "\n";
       SmallVector<unsigned, 4> LayoutVector;
       if (isColumnMajor(LTensor)) {
         ShapeVector.push_back(BlockCommonDim);
@@ -767,7 +769,8 @@ public:
     }
 
     void setRegInfo(LLVMContext &Ctx) {
-        SmallVector<unsigned, 4> ShapeVector {2, 2};
+        // TODO: this used to be 2, 2
+        SmallVector<unsigned, 4> ShapeVector {1, 1};
         SmallVector<unsigned, 4> LayoutVector {0, 1};
         SmallVector<unsigned, 4> PaddingVector {0, 0};
         L2DTileReg = TensorType(Ctx, ShapeVector, LayoutVector, PaddingVector);
@@ -779,6 +782,7 @@ public:
 
         Num2DRegTileRows = getNumRows(OutTile) / getNumRows(Out2DTileReg);
         Num2DRegTileCols = getNumColumns(OutTile) / getNumColumns(Out2DTileReg);
+        errs() << "out tile: " << getNumColumns(OutTile) << "\n";
         Num2DRegTileCommon = getNumColumns(LTile) / getNumColumns(L2DTileReg);
     }
   };
@@ -1097,16 +1101,16 @@ public:
         LLVMContext &Ctx, TensorType &InTensor, Value *WinShape,
         Value *WinStrides, SmallVector<unsigned, 4> &OutputLayout)
         : InputTensor(InTensor) {
-      
-      assert(dyn_cast<ConstantDataVector>(WinShape) 
+
+      assert(dyn_cast<ConstantDataVector>(WinShape)
           && "Window for reduction must be a constant vector.");
-      assert(dyn_cast<ConstantDataVector>(WinStrides) 
+      assert(dyn_cast<ConstantDataVector>(WinStrides)
           && "Strides for reduction must be a constant vector.");
-      
+
       // Get the window shape and strides
       WindowShape = getVectorFromValue(WinShape);
       WindowStrides = getVectorFromValue(WinStrides);
-      
+
       // Get the output shape and padding
       SmallVector<unsigned, 4> &InShapeVector = InTensor.getShapeVector();
       SmallVector<unsigned, 4> OutTensorShape;
@@ -1186,7 +1190,7 @@ public:
           LoopNestInfo.LoopLatches[LoopNestInfo.LoopLatches.size() - 2];
       TilePHIs[0]->addIncoming(OutTiles, InnerLoopLatch);
     }
-    
+
   private:
     void createLoopNestInfo(unsigned TileSize_M, unsigned TileSize_N) {
       auto NumOutRows = getNumRows(OutputTensor);
@@ -1202,7 +1206,7 @@ public:
         LoopSteps.push_back(1);
         LoopStartIndices.push_back(0);
       }
-      LoopBounds.insert(LoopBounds.end(), {NumOutRows, NumOutCols, 
+      LoopBounds.insert(LoopBounds.end(), {NumOutRows, NumOutCols,
                                            NumWinRows, NumWinCols});
       LoopSteps.insert(LoopSteps.end(), {1, 1, TileSize_M, TileSize_N});
       LoopStartIndices.insert(LoopStartIndices.end(), {0, 0, 0, 0});
@@ -1400,9 +1404,9 @@ public:
   /// dimensions to innermost dimensions.
   Value *computeIndex(
       TensorType &Tensor, SmallVector<Value *, 4> &InductionVars,
-      SmallVector<Value *, 4> &WinInductionVars, 
+      SmallVector<Value *, 4> &WinInductionVars,
       SmallVector<unsigned, 4> &WinStrides, Instruction *InsertBefore) {
-    
+
     SmallVector<unsigned, 4> &Shape = Tensor.getShapeVector();
     unsigned NumDims = Shape.size();
     assert(WinInductionVars.size() == WinStrides.size() &&
@@ -1436,7 +1440,7 @@ public:
         Instruction::Mul, WinInductionVars[NumWinIndices - 2], ConstCoefficient,
         "win.stride", InsertBefore);
     auto *WinOffset = BinaryOperator::Create(
-        Instruction::Add, WinProd, WinInductionVars[NumWinIndices - 1], 
+        Instruction::Add, WinProd, WinInductionVars[NumWinIndices - 1],
         "win.offset", InsertBefore);
     auto *Offset = BinaryOperator::Create(
         Instruction::Add, InOffset, WinOffset, "full.offset", InsertBefore);
@@ -1458,11 +1462,11 @@ public:
   SmallVector<Value *, 16> loadTile(
       T &TensorOpInfo, Value *TensorPtr, TensorType &InTensor,
       TensorType &InBlock, Type *EltTy, SmallVector<Value *, 4> &Indices,
-      SmallVector<Value *, 4> &WinInductionVars, SmallVector<unsigned, 4> &WinStrides, 
+      SmallVector<Value *, 4> &WinInductionVars, SmallVector<unsigned, 4> &WinStrides,
       MaybeAlign Align, bool IsVolatile, Instruction *InsertBefore) {
 
     auto *Int32Ty = Type::getInt32Ty(InsertBefore->getParent()->getContext());
-    auto *Offset = computeIndex(InTensor, Indices, 
+    auto *Offset = computeIndex(InTensor, Indices,
                       WinInductionVars, WinStrides, InsertBefore);
     auto *TileStart = GetElementPtrInst::Create(
         EltTy, TensorPtr, ArrayRef<Value *>(Offset), "tile.start", InsertBefore);
@@ -1477,7 +1481,7 @@ public:
     for (unsigned I = 0; I < TensorOpInfo.getNumRows(InBlock); ++I) {
       auto *GEP = computeVectorAddr(
           TileStart, ConstantInt::get(Int32Ty, I), Stride,
-          TensorOpInfo.getStride(InBlock), EltTy, InsertBefore); 
+          TensorOpInfo.getStride(InBlock), EltTy, InsertBefore);
       auto *Vector = new LoadInst(
           LoadTy, GEP, "row.load", IsVolatile,
           getAlignForIndex(I, Stride, EltTy, Align), InsertBefore);
@@ -1507,7 +1511,7 @@ public:
     for (unsigned I = 0; I < TensorOpInfo.getNumRows(InBlock); ++I) {
       auto *GEP = computeVectorAddr(
           TileStart, ConstantInt::get(Int32Ty, I), Stride,
-          TensorOpInfo.getStride(InBlock), EltTy, InsertBefore); 
+          TensorOpInfo.getStride(InBlock), EltTy, InsertBefore);
       auto *Vector = new LoadInst(
           LoadTy, GEP, "row.load", IsVolatile,
           getAlignForIndex(I, Stride, EltTy, Align), InsertBefore);
@@ -1519,25 +1523,30 @@ public:
   template <typename T>
   SmallVector<Value *, 16> load2DTile(
       T &TensorOpInfo, Value *TensorPtr, TensorType &InTensor,
-      TensorType &InBlock, TensorType &RegTile, Type *EltTy, 
-      SmallVector<Value *, 4> &Indices, 
+      TensorType &InBlock, TensorType &RegTile, Type *EltTy,
+      SmallVector<Value *, 4> &Indices,
       DenseMap<unsigned, std::vector<Value *>> &LoadMap,
       MaybeAlign Align, bool IsVolatile, const Twine Name,
       Instruction *InsertBefore) {
-    
+
     auto *Int32Ty = Type::getInt32Ty(InsertBefore->getParent()->getContext());
+    errs() << "Reached Int32Ty\n";
     auto *Offset = computeIndex(InTensor, Indices, false, InsertBefore);
+    errs() << "Reached Offset\n";
+
     auto *TileStart = GetElementPtrInst::Create(
         EltTy, TensorPtr, ArrayRef<Value *>(Offset), "tile.start", InsertBefore);
- 
+    errs() << "REACHED GEP\n";
     // Determine the size of the  tile registers
     auto RegTileTensorTypeValVect = RegTile.getTensorPropertiesValueVector();
     auto RegTileTensorTypeTypeVect = RegTile.getTensorPropertiesTypeVector();
     auto *TensorStride = ConstantInt::get(Int32Ty, TensorOpInfo.getStride(InTensor));
+    errs() << "Tensor Stride " << *TensorStride << "\n";
+    errs() << "Num Elements " << TensorOpInfo.getNumElems(InBlock) << "\n";
     auto *StridesVector = ConstantVector::get(
                   ArrayRef<Constant *>({ConstantInt::get(Int32Ty, 0), TensorStride}));
     unsigned BlockNumRows = TensorOpInfo.getNumRows(InBlock);
-    unsigned BlockNumCols = TensorOpInfo.getNumColumns(InBlock); 
+    unsigned BlockNumCols = TensorOpInfo.getNumColumns(InBlock);
     unsigned RegNumRows = TensorOpInfo.getNumRows(RegTile);
     unsigned RegNumCols = TensorOpInfo.getNumColumns(RegTile);
     auto *StrideVectTy = FixedVectorType::get(
@@ -1546,18 +1555,18 @@ public:
     for (unsigned J = 0; J < BlockNumRows; J += RegNumRows) {
       for (unsigned I = 0; I < BlockNumCols; I += RegNumCols) {
         auto *GEP = computeTileAddr(
-            TileStart, ConstantInt::get(Int32Ty, I), ConstantInt::get(Int32Ty, J), 
+            TileStart, ConstantInt::get(Int32Ty, I), ConstantInt::get(Int32Ty, J),
             TensorStride, TensorOpInfo.getNumElems(InBlock), EltTy, InsertBefore);
         std::vector<Type *> ArgsTy = {GEP->getType()};
         ArgsTy.insert(ArgsTy.end(), RegTileTensorTypeTypeVect.begin(), RegTileTensorTypeTypeVect.end());
         ArgsTy.insert(ArgsTy.end(), {StrideVectTy});
-        auto *TileLoadFunc = Intrinsic::getDeclaration(InsertBefore->getModule(), 
+        auto *TileLoadFunc = Intrinsic::getDeclaration(InsertBefore->getModule(),
                         Intrinsic::tensor_load, ArrayRef<Type *>(ArgsTy));
         std::vector<Value *> Args = {GEP};
         Args.insert(Args.end(), RegTileTensorTypeValVect.begin(), RegTileTensorTypeValVect.end());
         Args.insert(Args.end(), StridesVector);
-        auto *TileLoad = CallInst::Create(TileLoadFunc, Args, 
-                        Name +  "tile.load." + Twine(J / RegNumRows) 
+        auto *TileLoad = CallInst::Create(TileLoadFunc, Args,
+                        Name +  "tile.load." + Twine(J / RegNumRows)
                         + "." + Twine(I / RegNumCols) , InsertBefore);
         Result.push_back(TileLoad);
 
@@ -1571,7 +1580,7 @@ public:
     return Result;
   }
 
-  Value *loadTensor(Value *Ptr,  Type *ElemTy, 
+  Value *loadTensor(Value *Ptr,  Type *ElemTy,
                   unsigned NumElements, Instruction *InsertBefore) {
      auto *VecTy = FixedVectorType::get(ElemTy, NumElements);
     if(dyn_cast<PointerType>(Ptr->getType())->getElementType() != VecTy) {
@@ -1581,7 +1590,7 @@ public:
       Ptr = CastInst::CreatePointerCast(
           Ptr, VecPtrType, "vec.cast", InsertBefore);
     }
-    return new LoadInst(VecTy, Ptr, 
+    return new LoadInst(VecTy, Ptr,
                               "input.load", false, {}, InsertBefore);
   }
 
@@ -1626,9 +1635,9 @@ public:
 
   template <typename T>
   void store2DTile(
-      T &TensorOpInfo, Value *TensorPtr, TensorType &RegTile, 
+      T &TensorOpInfo, Value *TensorPtr, TensorType &RegTile,
       Type *EltTy, MaybeAlign MAlign, bool IsVolatile, Instruction *InsertBefore) {
-    
+
     auto &OutTensor = TensorOpInfo.getOutputTensor();
     auto &OutBlock = TensorOpInfo.getOutputTile();
     auto *Int32Ty = Type::getInt32Ty(InsertBefore->getParent()->getContext());
@@ -1637,7 +1646,7 @@ public:
         InsertBefore);
     auto *TileStart = GetElementPtrInst::Create(
         EltTy, TensorPtr, ArrayRef<Value *>(Offset), "tile.start", InsertBefore);
- 
+
     // Determine the size of the  tile registers
     auto RegTileTensorTypeValVect = RegTile.getTensorPropertiesValueVector();
     auto RegTileTensorTypeTypeVect = RegTile.getTensorPropertiesTypeVector();
@@ -1645,7 +1654,7 @@ public:
     auto *StridesVector = ConstantVector::get(
                   ArrayRef<Constant *>({ConstantInt::get(Int32Ty, 0), TensorStride}));
     unsigned BlockNumRows = TensorOpInfo.getNumRows(OutBlock);
-    unsigned BlockNumCols = TensorOpInfo.getNumColumns(OutBlock); 
+    unsigned BlockNumCols = TensorOpInfo.getNumColumns(OutBlock);
     unsigned RegNumRows = TensorOpInfo.getNumRows(RegTile);
     unsigned RegNumCols = TensorOpInfo.getNumColumns(RegTile);
     auto *StrideVectTy = FixedVectorType::get(
@@ -1654,19 +1663,25 @@ public:
     for (unsigned J = 0; J < BlockNumRows; J += RegNumRows) {
       for (unsigned I = 0; I < BlockNumCols; I += RegNumCols) {
         auto *GEP = computeTileAddr(
-            TileStart, ConstantInt::get(Int32Ty, I), ConstantInt::get(Int32Ty, J), 
+            TileStart, ConstantInt::get(Int32Ty, I), ConstantInt::get(Int32Ty, J),
             TensorStride, TensorOpInfo.getNumElems(OutBlock), EltTy, InsertBefore);
         std::vector<Type *> ArgsTy = {GEP->getType()};
         ArgsTy.insert(ArgsTy.end(), {StrideVectTy});
         ArgsTy.insert(ArgsTy.end(), {Type::getTokenTy(InsertBefore->getParent()->getContext())});
-        auto *TileStoreFunc = Intrinsic::getDeclaration(InsertBefore->getModule(), 
+        auto *TileStoreFunc = Intrinsic::getDeclaration(InsertBefore->getModule(),
                         Intrinsic::tensor_store, ArrayRef<Type *>(ArgsTy));
         errs() << "TILE STORE INTRINSIC: " << *TileStoreFunc << "\n";
         std::vector<Value *> Args = {GEP};
+        errs() << "REACHED Args\n";
         Args.insert(Args.end(), StridesVector);
-        Args.insert(Args.end(), 
+        errs() << "REACHED Args StridesVector \n";
+        errs() << J / RegNumRows << " " << I / RegNumCols <<  "\n";
+        errs() << *TensorOpInfo.getOutput2DTile(J / RegNumRows , I / RegNumCols) << "\n";
+        Args.insert(Args.end(),
               {TensorOpInfo.getOutput2DTile(J / RegNumRows , I / RegNumCols)});
+        errs() << "REACHED Args getOutput \n";
         CallInst::Create(TileStoreFunc, Args, "", InsertBefore);
+        errs() << "REACHED Call \n";
       }
     }
   }
@@ -1812,7 +1827,7 @@ public:
 
   Value *createReduceMacAccIntrinsic(
             Value* Acc, Value *A, Value *B, unsigned BlockSize, Instruction *InsertBefore) {
-    auto *MacIntrinsic = Intrinsic::getDeclaration(InsertBefore->getModule(), 
+    auto *MacIntrinsic = Intrinsic::getDeclaration(InsertBefore->getModule(),
                       Intrinsic::vector_reduce_mac, ArrayRef<Type*>({A->getType()}));
     auto *Int32Ty = Type::getInt32Ty(InsertBefore->getParent()->getContext());
     std::vector<Value *> Args = {Acc, A, B, ConstantInt::get(Int32Ty, BlockSize)};
@@ -2017,7 +2032,7 @@ public:
 
   void generateMatrixMultiply2DKernel(
     MatMulInfo &MMInfo, Type *EltType, Instruction *InsertBefore) {
-    
+
     unsigned NumLTilesRows = MMInfo.Num2DRegTileRows;
     unsigned NumRTilesCols = MMInfo.Num2DRegTileCols;
     unsigned NumTilesCommon = MMInfo.Num2DRegTileCommon;
@@ -2032,12 +2047,12 @@ public:
 
     auto &Ctx = InsertBefore->getParent()->getContext();
     auto *TokenTy = Type::getTokenTy(Ctx);
-    auto *MMAFunc = Intrinsic::getDeclaration(InsertBefore->getModule(), 
+    auto *MMAFunc = Intrinsic::getDeclaration(InsertBefore->getModule(),
                     Intrinsic::tensor_mma, ArrayRef<Type *>({OutTileVecTy}));
     errs() << "MMA INTRINSIC: " << *MMAFunc << "\n";
     std::vector<Type *> TyArgs = {OutTileVecTy};
     TyArgs.insert(TyArgs.end(), OutRegPropertiesTypeVect.begin(), OutRegPropertiesTypeVect.end());
-    auto *TypeInfoFunc = Intrinsic::getDeclaration(InsertBefore->getModule(), 
+    auto *TypeInfoFunc = Intrinsic::getDeclaration(InsertBefore->getModule(),
                     Intrinsic::tensor_typeinfo, ArrayRef<Type *>(TyArgs));
     errs() << "TYPEINFO INTRINSIC: " << *TypeInfoFunc << "\n";
 
@@ -2245,9 +2260,9 @@ public:
 
   Value *lowerMatMul(
       Value *LTensor, Value *RTensor, CallInst *MatMul, unsigned TileSize_M,
-      unsigned TileSize_N, unsigned Tile_K, unsigned InnerLoopUnrollFactor) {
+      unsigned TileSize_N, unsigned TileSize_K, unsigned InnerLoopUnrollFactor) {
     LLVM_DEBUG(dbgs() << "LOWERING MATMUL\n");
-    LLVM_DEBUG(dbgs() << TileSize_M << " " << TileSize_N << " " << Tile_K << " "
+    LLVM_DEBUG(dbgs() << TileSize_M << " " << TileSize_N << " " << TileSize_K << " "
                       << InnerLoopUnrollFactor << "\n");
     // auto *LTensor = TI->getTensorOperand(MatMul, 0);
     // auto *RTensor = TI->getTensorOperand(MatMul, 1);
@@ -2255,12 +2270,18 @@ public:
 
     TensorType &LTensorType = TI->getTensorTypeInfoFor(LTensor);
     TensorType &RTensorType = TI->getTensorTypeInfoFor(RTensor);
-    auto *EltType = dyn_cast<VectorType>(MatMul->getType())->getElementType();
-    auto &Ctx = MatMul->getParent()->getContext();
+    errs() << "REACHED " << *MatMul << " " << *MatMul->getType() << "\n";
 
+
+    auto *EltType = dyn_cast<VectorType>(MatMul->getType())->getElementType();
+    errs() << "REACHED " << *EltType << "\n";
+
+    auto &Ctx = MatMul->getParent()->getContext();
+    errs() << "REACHED\n";
     // Register the matmul information
     auto MMInfo = MatMulInfo(
         Ctx, LTensorType, RTensorType, TI->getLayoutVectorFor(MatMul));
+    errs() << "REACHED \n";
 
     // Create Loop nest and set up the tiles information
     MMInfo.createLoopNest(*this, TileSize_M, TileSize_N, TileSize_K, MatMul);
@@ -2275,18 +2296,21 @@ public:
       // Insert PHIs that represent the tiles
       MMInfo.insert2DTilePHIs(EltType, *TI);
 
-      errs() << "GENERATED PHIS: " << *(MatMul->getParent()->getParent()) << "\n";
+      // errs() << "GENERATED PHIS: " << *(MatMul->getParent()->getParent()) << "\n";
 
       LLVM_DEBUG(dbgs() << "INSERTING PHIS: \n");
       LLVM_DEBUG(dbgs() << *(MatMul->getParent()->getParent()) << "\n");
-
+      errs() << "REACHED Load\n";
       // Load tiles of the operands.
       MMInfo.LTileVector = load2DTile<MatMulInfo>(
-          MMInfo, TI->getMemPtrFor(LTensor), LTensorType, MMInfo.LTile, MMInfo.L2DTileReg, 
+          MMInfo, TI->getMemPtrFor(LTensor), LTensorType, MMInfo.LTile, MMInfo.L2DTileReg,
           EltType, MMInfo.LTensorIndices, MMInfo.LTileMap, {}, false, "L",
           InnerBodyTerminator);
+      errs() << "REACHED\n";
+      errs() << *TI->getMemPtrFor(LTensor) << "\n";
+      errs() << *TI->getMemPtrFor(RTensor) << "\n";
       MMInfo.RTileVector = load2DTile<MatMulInfo>(
-          MMInfo, TI->getMemPtrFor(RTensor), RTensorType, MMInfo.RTile, MMInfo.R2DTileReg, 
+          MMInfo, TI->getMemPtrFor(RTensor), RTensorType, MMInfo.RTile, MMInfo.R2DTileReg,
           EltType, MMInfo.RTensorIndices, MMInfo.RTileMap, {}, false, "R",
           InnerBodyTerminator);
 
@@ -2333,6 +2357,7 @@ public:
       LLVM_DEBUG(dbgs() << "GENERATING MATMUL: \n");
       LLVM_DEBUG(dbgs() << *(MatMul->getParent()->getParent()) << "\n");
 
+
       // Store tiles of outputs.
       storeTile<MatMulInfo>(
           MMInfo, TI->getMemPtrFor(MatMul), EltType, {}, false,
@@ -2348,7 +2373,7 @@ public:
     // Force unrolling of innermost loop
     forceUnrollOfLoop(
         LI->getLoopFor(MMInfo.getInnerLoopBody()), InnerLoopUnrollFactor);
-    
+
     // Load the tensor now
     auto *VecTy = FixedVectorType::get(EltType, TI->getTensorAllocSize(MatMul));
     auto *MallocPtr = TI->getMemPtrFor(MatMul);
@@ -2358,6 +2383,7 @@ public:
         MallocPtr, PointerType::get(VecTy, AS), "malloc.cast", MatMul);
     auto *Output =
         new LoadInst(VecTy, CastMallocPtr, "final.load", false, {}, MatMul);
+    errs() << "REACHED OUTPUT: " << *Output << "\n";
     return Output;
   }
 
@@ -2444,7 +2470,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
 
     // Load the tensor
     auto *Ptr = TI->getMemPtrFor(Op);
-    Input = loadTensor(Ptr, ElemTy, 
+    Input = loadTensor(Ptr, ElemTy,
                     TI->getTensorAllocSize(Input), Op);
 
     // Set up the information fro the elementwise operations.
@@ -2531,7 +2557,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
 
     // Load the tensor
     auto *Ptr = TI->getMemPtrFor(Relu);
-    Input = loadTensor(Ptr, ElemTy, 
+    Input = loadTensor(Ptr, ElemTy,
                     TI->getTensorAllocSize(Input), Relu);
 
     auto EwInfo = ElementWiseInfo(InputTensor);
@@ -2609,7 +2635,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
 
     // Load the tensor
     auto *Ptr = TI->getMemPtrFor(Tanh);
-    Input = loadTensor(Ptr, ElemTy, 
+    Input = loadTensor(Ptr, ElemTy,
                     TI->getTensorAllocSize(Input), Tanh);
 
     // Set up the information fro the elementwise operations.
@@ -2684,7 +2710,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
 
     // Load the tensor
     auto *Ptr = TI->getMemPtrFor(Sigmoid);
-    Input = loadTensor(Ptr, ElemTy, 
+    Input = loadTensor(Ptr, ElemTy,
                     TI->getTensorAllocSize(Input), Sigmoid);
 
     // Set up the information fro the elementwise operations.
@@ -2768,7 +2794,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
       // Load the tensor
       auto *ElemTy = dyn_cast<VectorType>(Broadcast->getType())->getElementType();
       auto *Ptr = TI->getMemPtrFor(Broadcast);
-      Input = loadTensor(Ptr, ElemTy, 
+      Input = loadTensor(Ptr, ElemTy,
                       TI->getTensorAllocSize(Input), Broadcast);
       auto *Output = generateBroadcastKernel(Input, BroadcastVal, NumElems, Broadcast);
 
@@ -2901,25 +2927,37 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     return Output;
   }
 
-  Value *lowerConv(CallInst *Conv) {
-    errs() << "LOWERING CONVOLUTION" << "\n";
-    auto *Input = TI->getTensorOperand(Conv, 0);
-    auto *Filter = TI->getTensorOperand(Conv, 1);
-    errs() << *(Input->getType()) << "\n";
-    errs() << *(Filter->getType()) << "\n";
-    errs() << "REACHED " << *Input << " " << *Filter <<  "\n";
-    TensorType &InputTensor = TI->getTensorTypeInfoFor(Input);
-
-    auto *ElemTy = dyn_cast<VectorType>(Input->getType())->getElementType();
-
+  Value *lowerConv(CallInst *Conv, unsigned TileSize_M,
+      unsigned TileSize_N, unsigned Tile_K, unsigned InnerLoopUnrollFactor) {
+    auto &Ctx = Conv->getParent()->getContext();
+    errs() << "LOWERING CONVOLUTION " << *Conv << "\n";
+    auto *ElemTy = dyn_cast<VectorType>(Conv->getType())->getElementType();
 
     auto* II = dyn_cast<IntrinsicInst>(Conv);
     Instruction *InsertBefore = II;
 
+    auto *Input = TI->getTensorOperand(Conv, 0);
+    // Load the tensor
+    auto *Ptr = TI->getMemPtrFor(Input);
+    errs() << "Got Mem Ptr" << "\n";
+
+    Input = loadTensor(Ptr, ElemTy,
+                    TI->getTensorAllocSize(Input), InsertBefore);
+    errs() << "Loaded Tensor" << "\n";
+
+    auto *Filter = TI->getTensorOperand(Conv, 1);
+    Ptr = TI->getMemPtrFor(Filter);
+    Filter = loadTensor(Ptr, ElemTy,
+                    TI->getTensorAllocSize(Filter), InsertBefore);
+
+    errs() << *(Input->getType()) << "\n";
+    errs() << *(Filter->getType()) << "\n";
+    errs() << "REACHED " << *Input << " " << *Filter <<  "\n";
+    TensorType &FilterTensor = TI->getTensorTypeInfoFor(Filter);
+
+
+
     auto Ty = Type::getInt32Ty(II->getModule()->getContext());
-    auto Ty8 = Type::getInt8Ty(II->getModule()->getContext());
-    errs() << "REACHED " << *Input <<  "\n";
-    InputTensor.print(errs());
     // TODO: Hardcoded for now
     auto *FilterSize = ConstantInt::get(Ty, 4);
     auto *InputWidth = ConstantInt::get(Ty, 4);
@@ -2935,47 +2973,162 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
 
     auto *VecTy = dyn_cast<FixedVectorType>(Conv->getType());
     auto *AllocTy = VecTy->getElementType();
-    Instruction *MallocPtr = CallInst::CreateMalloc(
+    Instruction *BasePtr = CallInst::CreateMalloc(
               InsertBefore, AllocTy, AllocTy, ConstantInt::get(AllocTy, 1),
               Im2ColSize, nullptr, "");
 
-    errs() << "COMPUTED MALLOC PTR " << *MallocPtr << "\n";
+    errs() << "COMPUTED MALLOC PTR " << *BasePtr << "\n";
 
-    auto *V = ExtractElementInst::Create(
-            Input, ConstantInt::get(ElemTy, 0),
-            "im2col.extract", InsertBefore);
 
-    errs() << *V << "\n";
-
-    errs() << *cast<PointerType>(MallocPtr->getType())->getElementType() << "\n";
-    StoreInst *st = new StoreInst(V, MallocPtr, InsertBefore);
+    // TODO: Turn these into LLVM loops
+    // size of filter = 2x2
+    for(int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
+            int rowIdx = j + i*2;
+            // number of convs in each dimension = 3
+            for(unsigned int yy =0; yy < 3; ++yy) {
+                for(unsigned int xx=0; xx < 3; ++xx) {
+                    int colIdx = xx + yy*3;
+                    auto *V = ExtractElementInst::Create(
+                      Input, ConstantInt::get(ElemTy, 4*(i+yy)+(j+xx) ),
+                      "im2col.extract", InsertBefore);
+                    auto *Offset = GetElementPtrInst::Create(
+                        ElemTy, BasePtr, ConstantInt::get(Ty, (rowIdx)*9+colIdx), "im2col.elem", InsertBefore);
+                  new StoreInst(V, Offset, InsertBefore);
+                }
+            }
+        }
+    }
 
 
     unsigned AS =
-        dyn_cast<PointerType>(MallocPtr->getType())->getAddressSpace();
-    auto *CastMallocPtr = CastInst::CreatePointerCast(
-        MallocPtr, PointerType::get(VecTy, AS), "malloc.cast", InsertBefore);
-    auto *Output =
-        new LoadInst(VecTy, CastMallocPtr, "final.load", false, {}, InsertBefore);
+        dyn_cast<PointerType>(BasePtr->getType())->getAddressSpace();
 
-    errs() << *Input << " " << *MallocPtr << "\n";
+
+    auto *Im2ColVecTy = FixedVectorType::get(ElemTy, 9*4);
+    auto* FilterTy = FixedVectorType::get(ElemTy, 4);
+
+    auto *CastIm2ColMallocPtr = CastInst::CreatePointerCast(
+        BasePtr, PointerType::get(Im2ColVecTy, AS), "malloc.cast", InsertBefore);
+    auto *LoadedMalloc =
+        new LoadInst(Im2ColVecTy, CastIm2ColMallocPtr, "im2col.load", false, {}, InsertBefore);
+
+    // auto *MatMulFunc = Intrinsic::getDeclaration(InsertBefore->getModule(),
+    //                    Intrinsic::tensor_matmul, ArrayRef<Type *>(ArgsTy));
+
+    // create im2col shapevector
+    SmallVector<unsigned, 4> ShapeVector;
+    ShapeVector.push_back(9);
+    ShapeVector.push_back(4);
+
+    SmallVector<unsigned, 4> LayoutVector;
+    LayoutVector.push_back(0);
+    LayoutVector.push_back(1);
+    SmallVector<unsigned, 4> PaddingVector;
+    PaddingVector.push_back(0);
+    PaddingVector.push_back(0);
+
+
+    TensorType Im2ColTensorType = TensorType(Ctx, ShapeVector, LayoutVector, PaddingVector);
+    auto Im2ColPropertiesTypeVect = Im2ColTensorType.getTensorPropertiesTypeVector();
+    auto Im2ColPropertiesValVect = Im2ColTensorType.getTensorPropertiesValueVector();
+
+    std::vector<Type *> Im2ColTypeInfoArgsTy = {Im2ColVecTy};
+    Im2ColTypeInfoArgsTy.insert(Im2ColTypeInfoArgsTy.end(), Im2ColPropertiesTypeVect.begin(), Im2ColPropertiesTypeVect.end());
+    auto *Im2ColTypeInfoFunc = Intrinsic::getDeclaration(InsertBefore->getModule(),
+                    Intrinsic::tensor_typeinfo, ArrayRef<Type *>(Im2ColTypeInfoArgsTy));
+    errs() << "TYPEINFO INTRINSIC: " << *Im2ColTypeInfoFunc << "\n";
+
+    std::vector<Value *> Args = {LoadedMalloc};
+    Args.insert(Args.end(), Im2ColPropertiesValVect.begin(), Im2ColPropertiesValVect.end());
+    auto *Im2ColTypeInfo = CallInst::Create(Im2ColTypeInfoFunc, Args, "im2col.tensor", InsertBefore);
+
+    ShapeVector.clear();
+    ShapeVector.push_back(4);
+    ShapeVector.push_back(1);
+
+    TensorType FilterReshapeTensorType = TensorType(Ctx, ShapeVector, LayoutVector, PaddingVector);
+    auto FilterReshapePropertiesTypeVect = FilterReshapeTensorType.getTensorPropertiesTypeVector();
+    auto FilterReshapePropertiesValVect = FilterReshapeTensorType.getTensorPropertiesValueVector();
+
+    std::vector<Type *> FilterReshapeTypeInfoArgsTy = {FilterTy};
+    FilterReshapeTypeInfoArgsTy.insert(FilterReshapeTypeInfoArgsTy.end(), FilterReshapePropertiesTypeVect.begin(),
+                                        FilterReshapePropertiesTypeVect.end());
+    auto *FilterReshapeTypeInfoFunc = Intrinsic::getDeclaration(InsertBefore->getModule(),
+                    Intrinsic::tensor_typeinfo, ArrayRef<Type *>(FilterReshapeTypeInfoArgsTy));
+
+
+
+    Args.clear();
+    Args = {Filter};
+    Args.insert(Args.end(), FilterReshapePropertiesValVect.begin(), FilterReshapePropertiesValVect.end());
+    auto *FilterReshapedTypeInfo = CallInst::Create(FilterReshapeTypeInfoFunc, Args, "filter.tensor", InsertBefore);
+
+
+    // auto* Output = CallInst::Create(MatMulFunc->getFunctionType(), MatMulFunc, ArrayRef<Value *>({Im2ColVec, Filter}), "conv.output", InsertBefore);
+    errs() << *Im2ColTypeInfo  << " " << *FilterReshapedTypeInfo << "\n";
+
+    std::vector<Type *> MatMulArgsTy = {FixedVectorType::get(ElemTy, 9)};
+    auto *MatMulFunc = Intrinsic::getDeclaration(InsertBefore->getModule(),
+                      Intrinsic::tensor_matmul, ArrayRef<Type *>(MatMulArgsTy));
+
+    errs() << "MATMUL INTRINSIC: " << *MatMulFunc << "\n";
+    Args.clear();
+    Args = {Im2ColTypeInfo, FilterReshapedTypeInfo};
+    auto *MatMulResult = CallInst::Create(MatMulFunc, Args, "conv.output", InsertBefore);
+
+
+    errs() << *MatMulResult << " " << *MatMulResult->getType() << "\n";
+
+
+    // auto *MatMulVecTy =
+    //     FixedVectorType::get(ElemTy, TI->getTensorAllocSize(MatMulResult));
+    // auto *MallocPtr = TI->getMemPtrFor(MatMulResult);
+    // AS =
+    //     dyn_cast<PointerType>(MallocPtr->getType())->getAddressSpace();
+    // auto *CastMallocPtr = CastInst::CreatePointerCast(
+    //     MallocPtr, PointerType::get(MatMulVecTy, AS), "malloc.cast", InsertBefore);
+    // auto *Output =
+    //     new LoadInst(MatMulVecTy, CastMallocPtr, "final.load", false, {}, InsertBefore);
+
+    // storeTensor(TI->getMemPtrFor(Conv), MatMulResult, InsertBefore);
+    errs() << "REACHED" << "\n";
+
+    TI->addTensorInfoFor(Im2ColTypeInfo, Im2ColTensorType);
+    TI->addMemPtrForTensorVal(Im2ColTypeInfo, BasePtr);
+    TI->addTensorInfoFor(FilterReshapedTypeInfo, FilterReshapeTensorType);
+    TI->addMemPtrForTensorVal(FilterReshapedTypeInfo, Ptr);
+
+    ShapeVector.clear();
+    ShapeVector.push_back(3);
+    ShapeVector.push_back(3);
+    TensorType MatMulTensorType = TensorType(Ctx, ShapeVector, LayoutVector, PaddingVector);
+
+    errs() << "CONV MEM: " << *TI->getMemPtrFor(Conv) << "\n";
+
+    TI->addTensorInfoFor(MatMulResult, MatMulTensorType);
+    TI->addMemPtrForTensorVal(MatMulResult, TI->getMemPtrFor(Conv));
+    TI->addTensorAllocSizeFor(MatMulResult, 9);
+
+    auto *Output = lowerMatMul(Im2ColTypeInfo, FilterReshapedTypeInfo, dyn_cast<IntrinsicInst>(MatMulResult), 1, 1, 1, InnerLoopUnrollFactor);
+    errs() << *Output->getType() << "\n";
     return Output;
   }
-  Value *createReductionAccumulate(Intrinsic::ID VectorID, Intrinsic::ID ScalarID, 
+  Value *createReductionAccumulate(Intrinsic::ID VectorID, Intrinsic::ID ScalarID,
       Value *Acc, Value *Input, Instruction *InsertBefore) {
     Value *ReducedOut = Input;
     if(Input->getType()->isVectorTy()) {
-      auto *Declaration = Intrinsic::getDeclaration(InsertBefore->getModule(), 
+      auto *Declaration = Intrinsic::getDeclaration(InsertBefore->getModule(),
                                   VectorID, ArrayRef<Type*>({Input->getType()}));
-      ReducedOut = CallInst::Create(Declaration->getFunctionType(), Declaration, 
+      ReducedOut = CallInst::Create(Declaration->getFunctionType(), Declaration,
                     ArrayRef<Value *>(Input), "reduce.vector", InsertBefore);
     }
     if (!Acc)
       return ReducedOut;
 
-    auto *Declaration = Intrinsic::getDeclaration(InsertBefore->getModule(), ScalarID, 
+    auto *Declaration = Intrinsic::getDeclaration(InsertBefore->getModule(), ScalarID,
               ArrayRef<Type*>({ReducedOut->getType()}));
-    return CallInst::Create(Declaration->getFunctionType(), Declaration, 
+    return CallInst::Create(Declaration->getFunctionType(), Declaration,
                     ArrayRef<Value *>({Acc, ReducedOut}), "reduce.scalar", InsertBefore);
   }
 
@@ -2983,20 +3136,20 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
       Value *Acc, Value *Input, Instruction *InsertBefore) {
     Value *ReducedOut = Input;
     if(Input->getType()->isVectorTy()) {
-      auto *Declaration = Intrinsic::getDeclaration(InsertBefore->getModule(), 
+      auto *Declaration = Intrinsic::getDeclaration(InsertBefore->getModule(),
                                   VectorID, ArrayRef<Type*>({Input->getType()}));
-      ReducedOut = CallInst::Create(Declaration->getFunctionType(), Declaration, 
+      ReducedOut = CallInst::Create(Declaration->getFunctionType(), Declaration,
                     ArrayRef<Value *>(Input), "reduce.vector", InsertBefore);
     }
     if (!Acc)
       return ReducedOut;
 
-    return BinaryOperator::Create(ScalarOpcode, Acc, ReducedOut, 
+    return BinaryOperator::Create(ScalarOpcode, Acc, ReducedOut,
                                   "reduce.scalar", InsertBefore);
   }
 
   void generateReductionKernel(
-      ReductionInfo &ReduceInfo, Intrinsic::ID VectorID, Intrinsic::ID ScalarID, 
+      ReductionInfo &ReduceInfo, Intrinsic::ID VectorID, Intrinsic::ID ScalarID,
       Type *EltType, Instruction *InsertBefore) {
     const unsigned VF = std::max<unsigned>(
         TTI.getRegisterBitWidth(true) /
@@ -3015,30 +3168,30 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
         while (J + BlockSize > NumBlockCols) {
           BlockSize /= 2;
         }
-        
+
         Value *Input = InTileVector[I];
         if(InTileVector[I]->getType()->isVectorTy()) {
           auto *Poison = PoisonValue::get(InTileVector[I]->getType());
-          Input = new ShuffleVectorInst(InTileVector[I], Poison, 
+          Input = new ShuffleVectorInst(InTileVector[I], Poison,
                   createSequentialMask(J, BlockSize, 0), "block", InsertBefore);
         }
-        
+
         Acc = createReductionAccumulate(VectorID, ScalarID,
             I == 0 && J == 0 ? nullptr : Acc, Input, InsertBefore);
       }
     }
     InsertCallToPrint(Acc, InsertBefore);
     InsertCallToPrint(ReduceInfo.OutTiles, InsertBefore);
-    auto *Declaration = Intrinsic::getDeclaration(InsertBefore->getModule(), ScalarID, 
+    auto *Declaration = Intrinsic::getDeclaration(InsertBefore->getModule(), ScalarID,
               ArrayRef<Type*>({Acc->getType()}));
-    ReduceInfo.OutTiles = CallInst::Create(Declaration->getFunctionType(), Declaration, 
-                    ArrayRef<Value *>({Acc, ReduceInfo.OutTiles}), 
+    ReduceInfo.OutTiles = CallInst::Create(Declaration->getFunctionType(), Declaration,
+                    ArrayRef<Value *>({Acc, ReduceInfo.OutTiles}),
                     "reduce.acc", InsertBefore);
     InsertCallToPrint(ReduceInfo.OutTiles, InsertBefore);
   }
 
   void generateReductionKernel(
-      ReductionInfo &ReduceInfo, Intrinsic::ID VectorID, Instruction::BinaryOps ScalarOpcode, 
+      ReductionInfo &ReduceInfo, Intrinsic::ID VectorID, Instruction::BinaryOps ScalarOpcode,
       Type *EltType, Instruction *InsertBefore) {
     const unsigned VF = std::max<unsigned>(
         TTI.getRegisterBitWidth(true) /
@@ -3057,28 +3210,28 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
         while (J + BlockSize > NumBlockCols) {
           BlockSize /= 2;
         }
-        
+
         Value *Input = InTileVector[I];
         if(InTileVector[I]->getType()->isVectorTy()) {
           auto *Poison = PoisonValue::get(InTileVector[I]->getType());
-          Input = new ShuffleVectorInst(InTileVector[I], Poison, 
+          Input = new ShuffleVectorInst(InTileVector[I], Poison,
                   createSequentialMask(J, BlockSize, 0), "block", InsertBefore);
         }
-        
+
         Acc = createReductionAccumulate(VectorID, ScalarOpcode,
             I == 0 && J == 0 ? nullptr : Acc, Input, InsertBefore);
       }
     }
     InsertCallToPrint(Acc, InsertBefore);
     InsertCallToPrint(ReduceInfo.OutTiles, InsertBefore);
-    ReduceInfo.OutTiles = BinaryOperator::Create(ScalarOpcode, Acc, 
+    ReduceInfo.OutTiles = BinaryOperator::Create(ScalarOpcode, Acc,
                             ReduceInfo.OutTiles, "reduce.acc", InsertBefore);
     InsertCallToPrint(ReduceInfo.OutTiles, InsertBefore);
   }
 
   Value *lowerReduction(
-      CallInst *Reduce, int64_t InitVal, 
-      Intrinsic::ID VectorID, Intrinsic::ID ScalarID, 
+      CallInst *Reduce, int64_t InitVal,
+      Intrinsic::ID VectorID, Intrinsic::ID ScalarID,
       unsigned TileSize_M, unsigned TileSize_N, unsigned InnerLoopUnrollFactor) {
     // Get the input and output tensors
     auto *Input = TI->getTensorOperand(Reduce, 0);
@@ -3106,18 +3259,18 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     // Load tile for the input tensor.
     ReduceInfo.InTileVector = loadTile<ReductionInfo>(
         ReduceInfo, TI->getMemPtrFor(Input), InputTensor, ReduceInfo.InTile, EltType,
-        ReduceInfo.InTensorIndices, ReduceInfo.WinTensorIndices, 
+        ReduceInfo.InTensorIndices, ReduceInfo.WinTensorIndices,
         ReduceInfo.WindowStrides, {}, false, InnerBodyTerminator);
 
     // Generate kernel for reduction
-    generateReductionKernel(ReduceInfo, VectorID, ScalarID, 
+    generateReductionKernel(ReduceInfo, VectorID, ScalarID,
                             EltType, InnerBodyTerminator);
-    
+
     // Store tiles of outputs.
     storeTile<ReductionInfo>(
         ReduceInfo, TI->getMemPtrFor(Reduce), EltType, {}, false,
         (ReduceInfo.getBlockToStoreTile())->getTerminator());
-    
+
     errs() << "--GENERATED REDUCTION KERNEL: " << *(Reduce->getParent()->getParent()) << "\n";
 
     // Finish completeling the PHIs for tiles
@@ -3142,8 +3295,8 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
   }
 
   Value *lowerReduction(
-      CallInst *Reduce, int64_t InitVal, 
-      Intrinsic::ID VectorID, Instruction::BinaryOps ScalarOpcode, 
+      CallInst *Reduce, int64_t InitVal,
+      Intrinsic::ID VectorID, Instruction::BinaryOps ScalarOpcode,
       unsigned TileSize_M, unsigned TileSize_N, unsigned InnerLoopUnrollFactor) {
     // Get the input and output tensors
     auto *Input = TI->getTensorOperand(Reduce, 0);
@@ -3171,18 +3324,18 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     // Load tile for the input tensor.
     ReduceInfo.InTileVector = loadTile<ReductionInfo>(
         ReduceInfo, TI->getMemPtrFor(Input), InputTensor, ReduceInfo.InTile, EltType,
-        ReduceInfo.InTensorIndices, ReduceInfo.WinTensorIndices, 
+        ReduceInfo.InTensorIndices, ReduceInfo.WinTensorIndices,
         ReduceInfo.WindowStrides, {}, false, InnerBodyTerminator);
 
     // Generate kernel for reduction
-    generateReductionKernel(ReduceInfo, VectorID, ScalarOpcode, 
+    generateReductionKernel(ReduceInfo, VectorID, ScalarOpcode,
                             EltType, InnerBodyTerminator);
-    
+
     // Store tiles of outputs.
     storeTile<ReductionInfo>(
         ReduceInfo, TI->getMemPtrFor(Reduce), EltType, {}, false,
         (ReduceInfo.getBlockToStoreTile())->getTerminator());
-    
+
     errs() << "--GENERATED REDUCTION KERNEL: " << *(Reduce->getParent()->getParent()) << "\n";
 
     // Finish completeling the PHIs for tiles
@@ -3241,7 +3394,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     CallInst *Reduce, unsigned TileSize_M, unsigned TileSize_N,
       unsigned InnerLoopUnrollFactor) {
         return lowerReduction(Reduce, (~((int64_t)0)),
-                Intrinsic::vector_reduce_and, Instruction::And, 
+                Intrinsic::vector_reduce_and, Instruction::And,
                 TileSize_M, TileSize_N, InnerLoopUnrollFactor);
   }
 
@@ -3249,7 +3402,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     CallInst *Reduce, unsigned TileSize_M, unsigned TileSize_N,
       unsigned InnerLoopUnrollFactor) {
         return lowerReduction(Reduce, 0,
-                Intrinsic::vector_reduce_or, Instruction::Or, 
+                Intrinsic::vector_reduce_or, Instruction::Or,
                 TileSize_M, TileSize_N, InnerLoopUnrollFactor);
   }
 
@@ -3257,7 +3410,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     CallInst *Reduce, unsigned TileSize_M, unsigned TileSize_N,
       unsigned InnerLoopUnrollFactor) {
         return lowerReduction(Reduce, 0,
-                Intrinsic::vector_reduce_xor, Instruction::Xor, 
+                Intrinsic::vector_reduce_xor, Instruction::Xor,
                 TileSize_M, TileSize_N, InnerLoopUnrollFactor);
   }
 
@@ -3267,11 +3420,11 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
         auto *EltType = dyn_cast<VectorType>(Reduce->getType())->getElementType();
         bool IsFP = EltType->isFloatingPointTy();
         if(IsFP) {
-          return lowerReduction(Reduce, 0, 
+          return lowerReduction(Reduce, 0,
                 Intrinsic::vector_reduce_fadd, Instruction::FAdd,
                 TileSize_M, TileSize_N, InnerLoopUnrollFactor);
         }
-        return lowerReduction(Reduce, 0, 
+        return lowerReduction(Reduce, 0,
                 Intrinsic::vector_reduce_add, Instruction::Add,
                 TileSize_M, TileSize_N, InnerLoopUnrollFactor);
   }
@@ -3282,11 +3435,11 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
         auto *EltType = dyn_cast<VectorType>(Reduce->getType())->getElementType();
         bool IsFP = EltType->isFloatingPointTy();
         if(IsFP) {
-          return lowerReduction(Reduce, 1, 
+          return lowerReduction(Reduce, 1,
                 Intrinsic::vector_reduce_fmul, Instruction::FMul,
                 TileSize_M, TileSize_N, InnerLoopUnrollFactor);
         }
-        return lowerReduction(Reduce, 1, 
+        return lowerReduction(Reduce, 1,
                 Intrinsic::vector_reduce_mul, Instruction::Mul,
                 TileSize_M, TileSize_N, InnerLoopUnrollFactor);
   }
@@ -3603,7 +3756,9 @@ bool LowerTensorIntrinsicsLegacyPass::runOnFunction(Function &F) {
           getKnob("InnerLoopUnrollFactor", InnerLoopUnrollFactor));
       break;
     case Intrinsic::tensor_convolution:
-      Output = LMT.lowerConv(II);
+      Output = LMT.lowerConv(II, getKnob("TileSize_M", TileSize_M), getKnob("TileSize_N", TileSize_N),
+          getKnob("TileSize_K", TileSize_K),
+          getKnob("InnerLoopUnrollFactor", InnerLoopUnrollFactor));
       break;
     default:
       continue;
@@ -3619,7 +3774,9 @@ bool LowerTensorIntrinsicsLegacyPass::runOnFunction(Function &F) {
       }
     }
     LLVM_DEBUG(dbgs() << "REPLACING USES\n");
+    errs() << "REPLACING USES\n";
     II->replaceAllUsesWith(Output);
+    errs() << "REPLACED USES\n";
     // TODO: update the tensor information
     // II->eraseFromParent();
     // LLVM_DEBUG(dbgs() << *(II->getParent()->getParent()) << "\n");
@@ -3640,8 +3797,8 @@ bool LowerTensorIntrinsicsLegacyPass::runOnFunction(Function &F) {
   }
 
   bool BrokenDebugInfo = true;
-  assert(verifyModule(BrokenDebugInfo, *(F.getParent()), errs()));
-
+  // assert(verifyModule(BrokenDebugInfo, *(F.getParent()), errs()));
+  errs() << "RETURNING\n";
   return true;
 }
 

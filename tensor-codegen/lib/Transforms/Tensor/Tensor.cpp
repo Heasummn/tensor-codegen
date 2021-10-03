@@ -400,7 +400,7 @@ static SmallVector<Value *, 3> getPropertyInfoForTensorPHI(PHINode *PHI,
         || CalledFuncName.contains(StringRef("tensor_reduce_xor"))
         || CalledFuncName.contains(StringRef("tensor_reduce_add"))
         || CalledFuncName.contains(StringRef("tensor_reduce_mul"))) {
-          // We use the map information of PHI's operands. 
+          // We use the map information of PHI's operands.
           // We are keeping things simple here for now.
           // The assumption here is that the PHI's operands
           // have the same tensor properties.
@@ -567,18 +567,12 @@ SmallVector<Value *, 3> getConvOutputProperties(LLVMContext &Ctx,
     std::vector<Constant *> LayoutVec;
     std::vector<Constant *> PaddingVec;
 
-    ShapeVec.push_back(ConstantInt::get(Int32Ty, 1));
-    ShapeVec.push_back(ConstantInt::get(Int32Ty, 1));
-    ShapeVec.push_back(ConstantInt::get(Int32Ty, 2));
-    ShapeVec.push_back(ConstantInt::get(Int32Ty, 2));
+    ShapeVec.push_back(ConstantInt::get(Int32Ty, 3));
+    ShapeVec.push_back(ConstantInt::get(Int32Ty, 3));
 
     LayoutVec.push_back(ConstantInt::get(Int32Ty, 1));
     LayoutVec.push_back(ConstantInt::get(Int32Ty, 2));
-    LayoutVec.push_back(ConstantInt::get(Int32Ty, 3));
-    LayoutVec.push_back(ConstantInt::get(Int32Ty, 4));
 
-    PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
-    PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
     PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
     PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
 
@@ -666,13 +660,13 @@ SmallVector<Value *, 3> getReduceOutputProperties(LLVMContext &Ctx,
         PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
     }
     unsigned NumWinDims = WindowShape.size();
-    unsigned OutputSize = ((WindowShape[NumWinDims - 2] 
+    unsigned OutputSize = ((WindowShape[NumWinDims - 2]
                 - getShapeDimensionVal(Input[0], NumInDims - 2)) / WindowStrides[NumWinDims - 2]) + 1;
     ShapeVec.push_back(ConstantInt::get(Int32Ty, OutputSize));
     LayoutVec.push_back(ConstantInt::get(Int32Ty, NumInDims - 2));
     PaddingVec.push_back(ConstantInt::get(Int32Ty, 0));
 
-    OutputSize = ((WindowShape[NumWinDims - 1] 
+    OutputSize = ((WindowShape[NumWinDims - 1]
                 - getShapeDimensionVal(Input[0], NumInDims - 1)) / WindowStrides[NumWinDims - 1]) + 1;
     ShapeVec.push_back(ConstantInt::get(Int32Ty, OutputSize));
     LayoutVec.push_back(ConstantInt::get(Int32Ty, NumInDims - 1));
@@ -863,7 +857,7 @@ static bool mapTensorValToProperty(Instruction *I,
       }
 
       // Add the output tensor's properties
-      ValToPropertyMap[CI] = getTransposeOutputProperties(CI->getModule()->getContext(), 
+      ValToPropertyMap[CI] = getTransposeOuputProperties(CI->getModule()->getContext(),
                                                   ValToPropertyMap[CI->getArgOperand(0)]);
 
       // If this call is in the tensor wait list, this is good time to remove it!
@@ -920,10 +914,10 @@ static bool mapTensorValToProperty(Instruction *I,
       }
 
       // Add the output tensor's properties
-      ValToPropertyMap[CI] = getReduceOutputProperties(CI->getModule()->getContext(), 
+      ValToPropertyMap[CI] = getReduceOutputProperties(CI->getModule()->getContext(),
                                                   ValToPropertyMap[CI->getArgOperand(0)],
                                                   WinShape, Strides);
-      
+
       // If this call is in the tensor wait list, this is good time to remove it!
       TensorWaitlist.erase(CI);
 

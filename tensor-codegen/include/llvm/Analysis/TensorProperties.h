@@ -57,6 +57,9 @@ private:
   TensorType getMatMulOuputProperties(
       LLVMContext &Ctx, TensorType &Input1, TensorType &Input2);
 
+    TensorType getConvOuputProperties(
+      LLVMContext &Ctx, TensorType &Input1, TensorType &Input2);
+
   TensorType getTransposeOuputProperties(LLVMContext &Ctx, TensorType &Input);
 
   TensorType getReduceOutputProperties(LLVMContext &Ctx, TensorType &Input,
@@ -122,6 +125,10 @@ public:
   void addTensorInfoFor(Value *V, TensorType &Ty) {
     ValToPropertyMap[V] = Ty;
     TensorValuesSet.insert(V);
+  }
+
+  void addTensorAllocSizeFor(Value *V, unsigned size) {
+    TensorToAllocSizeMap[V] = size;
   }
 
   void removeTenorInfoFor(Value *V) {
