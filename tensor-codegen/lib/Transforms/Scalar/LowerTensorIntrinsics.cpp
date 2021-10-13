@@ -54,11 +54,11 @@ static cl::opt<std::string> ReadKnobsFrom(
                                 "and lower instructions with these values"));
 
 //struct CodeGenKnobs {
-  unsigned TileSize_M = 2;
-  unsigned TileSize_N = 2;
-  unsigned TileSize_K = 2;
+  unsigned TileSize_M = 1;
+  unsigned TileSize_N = 1;
+  unsigned TileSize_K = 1;
 
-  unsigned TileSize = 2;
+  unsigned TileSize = 1;
 
   bool FuseTransposeAndMatmul = false;
 
@@ -674,14 +674,14 @@ public:
         LoopStartIndices.push_back(0);
       }
       LoopBounds.insert(LoopBounds.end(), {LTensorDim, RTensorDim, CommonDim});
-      LoopSteps.insert(LoopSteps.end(), {TileSize_M, TileSize_N, std::min(TileSize_K, CommonDim)});
+      LoopSteps.insert(LoopSteps.end(), {TileSize_M, TileSize_N, TileSize_K});
       LoopStartIndices.insert(LoopStartIndices.end(), {0, 0, 0});
 
       LoopNestInfo = TiledLoopNestInfo(LoopBounds, LoopSteps, LoopStartIndices);
 
       LBlockDim = TileSize_M;
       RBlockDim = TileSize_N;
-      BlockCommonDim = std::min(TileSize_K, CommonDim);
+      BlockCommonDim = TileSize_K;
       errs() << "CommonDim: " << CommonDim << "\n";
     }
 
@@ -3128,7 +3128,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     TI->addMemPtrForTensorVal(MatMulResult, TI->getMemPtrFor(Conv));
     TI->addTensorAllocSizeFor(MatMulResult, 9);
 
-    auto *Output = lowerMatMul(FilterReshapedTypeInfo, Im2ColTypeInfo, dyn_cast<IntrinsicInst>(MatMulResult), 2, 2, 2, InnerLoopUnrollFactor);
+    auto *Output = lowerMatMul(FilterReshapedTypeInfo, Im2ColTypeInfo, dyn_cast<IntrinsicInst>(MatMulResult), 1, 1, 1, InnerLoopUnrollFactor);
     errs() << *Output->getType() << "\n";
     MatMulResult->eraseFromParent();
     return Output;
