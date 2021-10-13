@@ -54,9 +54,9 @@ static cl::opt<std::string> ReadKnobsFrom(
                                 "and lower instructions with these values"));
 
 //struct CodeGenKnobs {
-  unsigned TileSize_M = 4;
-  unsigned TileSize_N = 4;
-  unsigned TileSize_K = 10;
+  unsigned TileSize_M = 2;
+  unsigned TileSize_N = 2;
+  unsigned TileSize_K = 2;
 
   unsigned TileSize = 2;
 
@@ -68,7 +68,7 @@ static cl::opt<std::string> ReadKnobsFrom(
 
   bool LowerToVectorIntrinsics = false;
 
-  bool LowerToTileIntrinsics = true;
+  bool LowerToTileIntrinsics = false;
 //};
 
 struct TiledLoopNestInfo {
@@ -133,7 +133,7 @@ BasicBlock *CreateLoop(
   Value *Inc =
       BinaryOperator::Create(Instruction::Add, IV, Step, Name + ".step", Latch);
   Value *Cond = CmpInst::Create(
-      Instruction::ICmp, ICmpInst::ICMP_NE, Inc, Bound, Name + ".step", Latch);
+      Instruction::ICmp, ICmpInst::ICMP_ULT, Inc, Bound, Name + ".step", Latch);
   BranchInst::Create(Header, Exit, Cond, Latch);
   IV->addIncoming(Inc, Latch);
 
@@ -485,11 +485,19 @@ public:
         : LTensor(LTensor), RTensor(RTensor) {
       if (isColumnMajor(LTensor)) {
         LTensorDim = getNumColumns(LTensor);
+      errs() << "Left Columns: " << LTensorDim << "\n";
+      errs() << "Left Rows: " << getNumRows(LTensor) << "\n";
+       errs() << "Right Columns: " << getNumColumns(RTensor) << "\n";
+      errs() << "Right Rows: " << getNumRows(RTensor) << "\n";
+
         CommonDim = getNumRows(LTensor);
       } else {
         LTensorDim = getNumRows(LTensor);
+      errs() << "Left Rows: " << LTensorDim << "\n";
+
         CommonDim = getNumColumns(LTensor);
       }
+
 
       if (isColumnMajor(RTensor)) {
         RTensorDim = getNumRows(RTensor);
@@ -666,14 +674,15 @@ public:
         LoopStartIndices.push_back(0);
       }
       LoopBounds.insert(LoopBounds.end(), {LTensorDim, RTensorDim, CommonDim});
-      LoopSteps.insert(LoopSteps.end(), {TileSize_M, TileSize_N, TileSize_K});
+      LoopSteps.insert(LoopSteps.end(), {TileSize_M, TileSize_N, std::min(TileSize_K, CommonDim)});
       LoopStartIndices.insert(LoopStartIndices.end(), {0, 0, 0});
 
       LoopNestInfo = TiledLoopNestInfo(LoopBounds, LoopSteps, LoopStartIndices);
 
       LBlockDim = TileSize_M;
       RBlockDim = TileSize_N;
-      BlockCommonDim = TileSize_K;
+      BlockCommonDim = std::min(TileSize_K, CommonDim);
+      errs() << "CommonDim: " << CommonDim << "\n";
     }
 
     void setIndicesInfo() {
@@ -1284,10 +1293,14 @@ public:
   Value *computeVectorAddr(
       Value *BasePtr, Value *Index, Value *TensorStride, unsigned NumElements,
       Type *EltType, Instruction *InsertBefore) {
-    assert(
-        (!dyn_cast<ConstantInt>(TensorStride) ||
-         dyn_cast<ConstantInt>(TensorStride)->getZExtValue() >= NumElements) &&
-        "Stride must be >= the number of elements in the result vector.");
+    errs() << "Num Elements: " << NumElements << "\n";
+    errs() << "Stride: " << dyn_cast<ConstantInt>(TensorStride)->getZExtValue() << "\n";
+
+
+    // assert(
+    //     (!dyn_cast<ConstantInt>(TensorStride) ||
+    //      dyn_cast<ConstantInt>(TensorStride)->getZExtValue() >= NumElements) &&
+    //     "Stride must be >= the number of elements in the result vector.");
 
     // Get pointer to the start of the selected vector. Skip GEP creation,
     // if we select vector 0.
@@ -1316,10 +1329,10 @@ public:
   Value *computeTileAddr(
       Value *BasePtr, Value *ColIndex, Value *RowIndex, Value *TensorStride,
       unsigned NumElements, Type *EltType, Instruction *InsertBefore) {
-    assert(
-        (!dyn_cast<ConstantInt>(TensorStride) ||
-         dyn_cast<ConstantInt>(TensorStride)->getZExtValue() >= NumElements) &&
-        "Stride must be >= the number of elements in the result vector.");
+    // assert(
+    //     (!dyn_cast<ConstantInt>(TensorStride) ||
+    //      dyn_cast<ConstantInt>(TensorStride)->getZExtValue() >= NumElements) &&
+    //     "Stride must be >= the number of elements in the result vector.");
 
     // Get pointer to the start of the selected vector. Skip GEP creation,
     // if we select vector 0.
@@ -2343,6 +2356,7 @@ public:
           MMInfo, TI->getMemPtrFor(LTensor), LTensorType, MMInfo.LTile,
           EltType, MMInfo.LTensorIndices, {}, false,
           InnerBodyTerminator);
+          errs() << "RIGHT\n" ;
       MMInfo.RTileVector = loadTile<MatMulInfo>(
           MMInfo, TI->getMemPtrFor(RTensor), RTensorType, MMInfo.RTile,
           EltType, MMInfo.RTensorIndices, {}, false,
@@ -3022,8 +3036,8 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     ShapeVector.push_back(4);
 
     SmallVector<unsigned, 4> LayoutVector;
-    LayoutVector.push_back(0);
     LayoutVector.push_back(1);
+    LayoutVector.push_back(0);
     SmallVector<unsigned, 4> PaddingVector;
     PaddingVector.push_back(0);
     PaddingVector.push_back(0);
@@ -3074,7 +3088,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
 
     errs() << "MATMUL INTRINSIC: " << *MatMulFunc << "\n";
     Args.clear();
-    Args = {Im2ColTypeInfo, FilterReshapedTypeInfo};
+    Args = {FilterReshapedTypeInfo, Im2ColTypeInfo};
     auto *MatMulResult = CallInst::Create(MatMulFunc, Args, "conv.output", InsertBefore);
 
 
@@ -3083,6 +3097,7 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
 
     // auto *MatMulVecTy =
     //     FixedVectorType::get(ElemTy, TI->getTensorAllocSize(MatMulResult));
+
     // auto *MallocPtr = TI->getMemPtrFor(MatMulResult);
     // AS =
     //     dyn_cast<PointerType>(MallocPtr->getType())->getAddressSpace();
@@ -3102,6 +3117,9 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     ShapeVector.clear();
     ShapeVector.push_back(3);
     ShapeVector.push_back(3);
+    LayoutVector.clear();
+    LayoutVector.push_back(0);
+    LayoutVector.push_back(1);
     TensorType MatMulTensorType = TensorType(Ctx, ShapeVector, LayoutVector, PaddingVector);
 
     errs() << "CONV MEM: " << *TI->getMemPtrFor(Conv) << "\n";
@@ -3110,8 +3128,9 @@ Value *generateElementWiseScalarKernel(Intrinsic::ID ID,
     TI->addMemPtrForTensorVal(MatMulResult, TI->getMemPtrFor(Conv));
     TI->addTensorAllocSizeFor(MatMulResult, 9);
 
-    auto *Output = lowerMatMul(Im2ColTypeInfo, FilterReshapedTypeInfo, dyn_cast<IntrinsicInst>(MatMulResult), 1, 1, 1, InnerLoopUnrollFactor);
+    auto *Output = lowerMatMul(FilterReshapedTypeInfo, Im2ColTypeInfo, dyn_cast<IntrinsicInst>(MatMulResult), 2, 2, 2, InnerLoopUnrollFactor);
     errs() << *Output->getType() << "\n";
+    MatMulResult->eraseFromParent();
     return Output;
   }
   Value *createReductionAccumulate(Intrinsic::ID VectorID, Intrinsic::ID ScalarID,
@@ -3797,7 +3816,7 @@ bool LowerTensorIntrinsicsLegacyPass::runOnFunction(Function &F) {
   }
 
   bool BrokenDebugInfo = true;
-  // assert(verifyModule(BrokenDebugInfo, *(F.getParent()), errs()));
+  // verifyModule(BrokenDebugInfo, *(F.getParent()), &errs());
   errs() << "RETURNING\n";
   return true;
 }

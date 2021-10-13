@@ -4,9 +4,9 @@
 _tensor_t9  foo(_tensor_t16 tensor1, _tensor_t tensor2) {
   _shape_t shape1 = {1, 1, 4, 4};
   _shape_t shape2 = {1, 1, 2, 2};
-  _shape_t shape3 = {1, 1, 2, 2};
+  _shape_t shape3 = {1, 1, 3, 3};
 
-  _layout_t layout1 =  {0, 1, 2, 3};
+  _layout_t layout1 =  {0, 0, 1, 1};
 
   _padding_t padding1 =  {0, 0, 0, 0};
 
